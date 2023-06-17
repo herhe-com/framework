@@ -1,0 +1,13 @@
+
+# misc
+.DS_Store
+
+.idea
+*bak
+.vscode
+
+# visual studio code
+.history
+*.log
+functions/*
+.temp/**
