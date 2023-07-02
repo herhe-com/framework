@@ -1,10 +1,10 @@
 package facades
 
 import (
-	"github.com/bsm/redislock"
 	"github.com/bwmarrin/snowflake"
+	"github.com/go-redsync/redsync/v4"
 )
 
-var Locker *redislock.Client
+var Locker *redsync.Redsync
 
 var Snowflake *snowflake.Node

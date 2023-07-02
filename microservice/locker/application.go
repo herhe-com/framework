@@ -1,13 +1,21 @@
 package locker
 
 import (
-	"github.com/bsm/redislock"
+	"errors"
+	"github.com/go-redsync/redsync/v4"
+	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
 	"github.com/herhe-com/framework/facades"
 )
 
 func NewApplication() (err error) {
 
-	facades.Locker = redislock.New(facades.Redis)
+	if facades.Redis == nil {
+		return errors.New("please initialize Redis first")
+	}
+
+	pool := goredis.NewPool(facades.Redis)
+
+	facades.Locker = redsync.New(pool)
 
 	return nil
 }
