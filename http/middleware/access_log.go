@@ -9,6 +9,7 @@ import (
 )
 
 func AccessMiddleware() app.HandlerFunc {
+
 	return func(c context.Context, ctx *app.RequestContext) {
 
 		if facades.Cfg.GetBool("app.debug") {
