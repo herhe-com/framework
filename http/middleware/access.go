@@ -8,11 +8,12 @@ import (
 	"time"
 )
 
-func AccessMiddleware() app.HandlerFunc {
+func Access() app.HandlerFunc {
 
 	return func(c context.Context, ctx *app.RequestContext) {
 
 		if facades.Cfg.GetBool("app.debug") {
+
 			start := time.Now()
 			ctx.Next(c)
 			end := time.Now()
