@@ -9,6 +9,10 @@ import (
 	"net/http"
 )
 
+func String(ctx *app.RequestContext, format string, values ...any) {
+	ctx.String(http.StatusOK, format, values...)
+}
+
 func Unauthorized(ctx *app.RequestContext) {
 	ctx.JSON(http.StatusOK, response.Response[any]{
 		Code:    40100,
