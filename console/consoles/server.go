@@ -1,6 +1,7 @@
 package consoles
 
 import (
+	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/config"
 	"github.com/herhe-com/framework/contracts/console"
@@ -18,17 +19,40 @@ func (*ServerProvider) Register() console.Console {
 		Name: "启动程序",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			host := net.JoinHostPort(facades.Cfg.GetString("app.address"), facades.Cfg.GetString("app.port"))
+			hp := net.JoinHostPort(facades.Cfg.GetString("app.address"), facades.Cfg.GetString("app.port"))
 
 			options := []config.Option{
-				server.WithHostPorts(host),
+				server.WithHostPorts(hp),
 			}
 
 			if facades.Cfg.GetBool("app.debug") {
 				options = append(options, server.WithExitWaitTime(1))
+			} else {
+				options = append(options, server.WithDisablePrintRoute(true))
 			}
 
-			facades.Server = server.Default(options...)
+			if option, ok := facades.Cfg.Get("app.server.options").([]config.Option); ok {
+				options = append(options, option...)
+			}
+
+			serv := server.Default(options...)
+
+			if middlewares, ok := facades.Cfg.Get("app.server.middlewares").([]app.HandlerFunc); ok {
+
+				for _, item := range middlewares {
+					serv.Use(item)
+				}
+			}
+
+			if route, ok := facades.Cfg.Get("app.server.route").(func(route *server.Hertz)); ok {
+				route(serv)
+			}
+
+			if handle, ok := facades.Cfg.Get("app.server.handle").(func(s *server.Hertz)); ok {
+				handle(serv)
+			}
+
+			serv.Spin()
 		},
 	}
 }
