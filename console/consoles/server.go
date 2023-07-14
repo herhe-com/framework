@@ -38,10 +38,7 @@ func (*ServerProvider) Register() console.Console {
 			serv := server.Default(options...)
 
 			if middlewares, ok := facades.Cfg.Get("app.server.middlewares").([]app.HandlerFunc); ok {
-
-				for _, item := range middlewares {
-					serv.Use(item)
-				}
+				serv.Use(middlewares...)
 			}
 
 			if route, ok := facades.Cfg.Get("app.server.route").(func(route *server.Hertz)); ok {
