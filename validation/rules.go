@@ -10,6 +10,12 @@ import (
 	"strings"
 )
 
+// captcha 验证验证码
+func captcha(fl validator.FieldLevel) bool {
+	ok, _ := regexp.MatchString(util.PatternOfCaptcha, fl.Field().String())
+	return ok
+}
+
 // mobile 验证手机号码
 func mobile(fl validator.FieldLevel) bool {
 	ok, _ := regexp.MatchString(util.PatternOfMobile, fl.Field().String())

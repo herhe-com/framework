@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/filesystem"
-	"github.com/herhe-com/framework/facades"
 	"github.com/herhe-com/framework/filesystem/util"
 	"github.com/herhe-com/framework/support/str"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/spf13/viper"
 	"io"
 	"net/url"
 	"os"
@@ -32,14 +31,22 @@ type Minio struct {
 	domain   string
 }
 
-func NewMinio(ctx context.Context) (*Minio, error) {
-	key := facades.Cfg.GetString("filesystem.minio.key")
-	secret := facades.Cfg.GetString("filesystem.minio.secret")
-	region := facades.Cfg.GetString("filesystem.minio.region")
-	bucket := facades.Cfg.GetString("filesystem.minio.bucket")
-	domain := facades.Cfg.GetString("filesystem.minio.domain")
-	ssl := facades.Cfg.GetBool("filesystem.minio.ssl", false)
-	endpoint := facades.Cfg.GetString("filesystem.minio.endpoint")
+func NewMinio(ctx context.Context, configs map[string]any) (*Minio, error) {
+
+	cfg := viper.New()
+
+	cfg.Set("minio", configs)
+
+	cfg.SetDefault("minio.ssl", false)
+
+	key := cfg.GetString("minio.key")
+	secret := cfg.GetString("minio.secret")
+	region := cfg.GetString("minio.region")
+	bucket := cfg.GetString("minio.bucket")
+	domain := cfg.GetString("minio.domain")
+	ssl := cfg.GetBool("minio.ssl")
+	endpoint := cfg.GetString("minio.endpoint")
+
 	endpoint = strings.TrimPrefix(endpoint, "http://")
 	endpoint = strings.TrimPrefix(endpoint, "https://")
 
@@ -49,7 +56,7 @@ func NewMinio(ctx context.Context) (*Minio, error) {
 		Region: region,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("init minio disk error: %s", err)
+		return nil, fmt.Errorf("init minio disk error: %v", err)
 	}
 
 	return &Minio{
@@ -273,18 +280,6 @@ func (r *Minio) TemporaryUrl(file string, timer time.Duration) (string, error) {
 	}
 
 	return resignedURL.String(), nil
-}
-
-func (r *Minio) WithContext(ctx context.Context) filesystem.Driver {
-
-	driver, err := NewMinio(ctx)
-
-	if err != nil {
-		//facades.Log.Errorf("init %s disk fail: %+v", r.disk, err)
-		color.Errorf("init %s disk fail: %+v", r.disk, err)
-	}
-
-	return driver
 }
 
 func (r *Minio) Url(file string) string {

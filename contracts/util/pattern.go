@@ -1,6 +1,7 @@
 package util
 
 const (
+	PatternOfCaptcha   = `^\d{6}$`
 	PatternOfMobile    = `^1\d{10}$`
 	PatternOfUsername  = `^[a-zA-Z\d\-_]{6,32}$`
 	PatternOfPassword  = `^[a-zA-Z\d\-_@$&%!]{6,32}$`

@@ -24,7 +24,11 @@ func keys(args ...any) string {
 
 func ttl() time.Duration {
 
-	ttl := facades.Cfg.GetInt64("cache.ttl")
+	t := facades.Cfg.GetInt64("cache.ttl")
 
-	return time.Duration(ttl)
+	if t <= 0 {
+		t = 120
+	}
+
+	return time.Minute * time.Duration(t)
 }

@@ -1,7 +1,6 @@
 package filesystem
 
 import (
-	"context"
 	"io"
 	"time"
 )
@@ -28,7 +27,6 @@ type Driver interface {
 	PutFileAs(path string, source File, name string) (string, error)
 	Size(file string) (int64, error)
 	TemporaryUrl(file string, time time.Duration) (string, error)
-	WithContext(ctx context.Context) Driver
 	Url(file string) string
 }
 

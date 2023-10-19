@@ -25,6 +25,10 @@ func (*ServerProvider) Register() console.Console {
 				server.WithHostPorts(hp),
 			}
 
+			if facades.Validator != nil {
+				options = append(options, server.WithCustomValidator(facades.Validator))
+			}
+
 			if facades.Cfg.GetBool("app.debug") {
 				options = append(options, server.WithExitWaitTime(1))
 			} else {

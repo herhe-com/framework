@@ -2,7 +2,6 @@ package local
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/facades"
@@ -231,10 +230,6 @@ func (local *Local) Size(file string) (int64, error) {
 
 func (local *Local) TemporaryUrl(file string, time time.Duration) (string, error) {
 	return local.Url(file), nil
-}
-
-func (local *Local) WithContext(ctx context.Context) filesystem.Driver {
-	return local
 }
 
 func (local *Local) Url(file string) string {

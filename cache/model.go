@@ -8,6 +8,7 @@ import (
 	"github.com/gookit/goutil/strutil"
 	"github.com/herhe-com/framework/facades"
 	"github.com/redis/go-redis/v9"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"reflect"
 	"strings"
@@ -31,7 +32,7 @@ func (m *Model) clear(tx *gorm.DB) {
 
 	key := id(tx)
 
-	if key != "" {
+	if lo.IsNotEmpty(key) && facades.Redis != nil {
 		facades.Redis.Del(tx.Statement.Context, keys(tx.Statement.Schema.Table, key))
 	}
 }

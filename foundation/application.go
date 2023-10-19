@@ -24,10 +24,10 @@ type Application struct {
 
 func (a *Application) Boot() {
 
+	a.SetLocation()
+
 	a.registerConfiguredServiceProviders()
 	a.bootConfiguredServiceProviders()
-
-	a.SetLocation()
 }
 
 func (a *Application) SetLocation() {

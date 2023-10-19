@@ -68,9 +68,15 @@ func NewDriver(disk string) (filesystem.Driver, error) {
 	//case DriverS3:
 	//	return NewS3(ctx, disk)
 	case DriverMinio:
-		return minio.NewMinio(ctx)
+
+		cfg, _ := facades.Cfg.Get("filesystem.minio").(map[string]any)
+
+		return minio.NewMinio(ctx, cfg)
 	case DriverQiniu:
-		return qiniu.NewQiniu(ctx)
+
+		cfg, _ := facades.Cfg.Get("filesystem.qiniu").(map[string]any)
+
+		return qiniu.NewQiniu(ctx, cfg)
 		//case DriverCustom:
 		//	driver, ok := facades.Cfg.Get(fmt.Sprintf("filesystems.disks.%s.via", disk)).(filesystem.Driver)
 		//	if !ok {

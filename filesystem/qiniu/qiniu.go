@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/facades"
 	"github.com/herhe-com/framework/filesystem/util"
@@ -13,6 +12,7 @@ import (
 	"github.com/qiniu/go-sdk/v7/cdn"
 	"github.com/qiniu/go-sdk/v7/storage"
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
 	"io"
 	"os"
 	"strings"
@@ -38,14 +38,21 @@ type Qiniu struct {
 	prefix    string
 }
 
-func NewQiniu(ctx context.Context) (*Qiniu, error) {
-	server := facades.Cfg.GetString("app.name")
-	access := facades.Cfg.GetString("filesystem.qiniu.access")
-	secret := facades.Cfg.GetString("filesystem.qiniu.secret")
-	bucket := facades.Cfg.GetString("filesystem.qiniu.bucket")
-	domain := facades.Cfg.GetString("filesystem.qiniu.domain")
-	delimiter := facades.Cfg.GetString("filesystem.qiniu.delimiter", "/")
-	prefix := facades.Cfg.GetString("filesystem.qiniu.prefix")
+func NewQiniu(ctx context.Context, configs map[string]any) (*Qiniu, error) {
+
+	cfg := viper.New()
+
+	cfg.Set("minio", configs)
+
+	cfg.SetDefault("qiniu.delimiter", "/")
+
+	server := cfg.GetString("app.name")
+	access := cfg.GetString("qiniu.access")
+	secret := cfg.GetString("qiniu.secret")
+	bucket := cfg.GetString("qiniu.bucket")
+	domain := cfg.GetString("qiniu.domain")
+	delimiter := cfg.GetString("qiniu.delimiter")
+	prefix := cfg.GetString("qiniu.prefix")
 
 	q := &Qiniu{
 		ctx:       ctx,
@@ -307,18 +314,6 @@ func (r *Qiniu) TemporaryUrl(key string, timer time.Duration) (url string, err e
 	}
 
 	return url, nil
-}
-
-func (r *Qiniu) WithContext(ctx context.Context) filesystem.Driver {
-
-	driver, err := NewQiniu(ctx)
-
-	if err != nil {
-		//facades.Log.Errorf("init %s disk fail: %+v", r.disk, err)
-		color.Errorf("init disk fail: %+v", err)
-	}
-
-	return driver
 }
 
 func (r *Qiniu) SetRedis(client *redis.Client) {
