@@ -67,15 +67,15 @@ func (r *RabbitMQ) Conn() (*rabbitmq.Conn, error) {
 	return rabbitmq.NewConn(r.url(), options...)
 }
 
-func (r *RabbitMQ) Producer(data []byte, queue string, routes []string, delays ...time.Duration) (err error) {
+func (r *RabbitMQ) Producer(data []byte, queue string, routes []string, delays ...int64) (err error) {
 
 	if err = r.CheckQueue(queue); err != nil {
 		return err
 	}
 
-	var delay time.Duration = 0
+	var delay int64 = 0
 
-	delays = lo.Filter(delays, func(item time.Duration, index int) bool {
+	delays = lo.Filter(delays, func(item int64, index int) bool {
 		return item > 0
 	})
 
@@ -86,6 +86,13 @@ func (r *RabbitMQ) Producer(data []byte, queue string, routes []string, delays .
 	var publisher *rabbitmq.Publisher
 
 	options := r.PublisherOptions(queue)
+
+	if delay > 0 {
+		options = append([]func(publisherOptions *rabbitmq.PublisherOptions){
+			rabbitmq.WithPublisherOptionsExchangeKind("x-delayed-message"),
+			rabbitmq.WithPublisherOptionsExchangeDurable,
+		}, options...)
+	}
 
 	options = append([]func(publisherOptions *rabbitmq.PublisherOptions){
 		rabbitmq.WithPublisherOptionsExchangeName(queue),
@@ -100,25 +107,39 @@ func (r *RabbitMQ) Producer(data []byte, queue string, routes []string, delays .
 	opts = append(opts, rabbitmq.WithPublishOptionsExchange(queue))
 
 	if delay > 0 {
-		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(rabbitmq.Table{"x-delay": delay * time.Minute}))
+		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(rabbitmq.Table{"x-delay": delay * 60 * 1000}))
 	}
 
 	return publisher.Publish(data, routes, opts...)
 }
 
-func (r *RabbitMQ) Consumer(handler func(data []byte), queue string) (err error) {
+func (r *RabbitMQ) Consumer(handler func(data []byte), queue string, delays ...bool) (err error) {
 
 	if err = r.CheckQueue(queue); err != nil {
 		return err
 	}
 
+	delays = lo.Filter(delays, func(item bool, index int) bool {
+		return item
+	})
+
 	options := r.ConsumerOptions(queue)
 
-	options = append([]func(consumerOptions *rabbitmq.ConsumerOptions){
-		rabbitmq.WithConsumerOptionsRoutingKey(queue),
+	if len(delays) > 0 {
+
+		options = append([]func(*rabbitmq.ConsumerOptions){
+			rabbitmq.WithConsumerOptionsExchangeArgs(rabbitmq.Table{
+				"x-delayed-type": "direct",
+			}),
+			rabbitmq.WithConsumerOptionsExchangeKind("x-delayed-message"),
+			rabbitmq.WithConsumerOptionsExchangeDurable,
+		}, options...)
+	}
+
+	options = append([]func(*rabbitmq.ConsumerOptions){
 		rabbitmq.WithConsumerOptionsExchangeName(queue),
+		rabbitmq.WithConsumerOptionsRoutingKey(queue),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
-		rabbitmq.WithConsumerOptionsConcurrency(10),
 		rabbitmq.WithConsumerOptionsConcurrency(10),
 	}, options...)
 
