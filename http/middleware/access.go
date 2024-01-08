@@ -12,7 +12,7 @@ func Access() app.HandlerFunc {
 
 	return func(c context.Context, ctx *app.RequestContext) {
 
-		if facades.Cfg.GetBool("app.debug") {
+		if facades.Cfg.GetBool("server.debug") {
 
 			start := time.Now()
 			ctx.Next(c)

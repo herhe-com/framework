@@ -3,6 +3,7 @@ package config
 type Application interface {
 	Env(key string, defaultValue ...any) any
 	Add(name string, configuration map[string]any)
+	Set(key string, configuration any)
 	Get(key string, defaultValue ...any) any
 	GetString(key string, defaultValue ...string) string
 	GetInt(key string, defaultValue ...int) int

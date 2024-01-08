@@ -46,7 +46,7 @@ func NewQiniu(ctx context.Context, configs map[string]any) (*Qiniu, error) {
 
 	cfg.SetDefault("qiniu.delimiter", "/")
 
-	server := cfg.GetString("app.name")
+	server := cfg.GetString("server.name")
 	access := cfg.GetString("qiniu.access")
 	secret := cfg.GetString("qiniu.secret")
 	bucket := cfg.GetString("qiniu.bucket")

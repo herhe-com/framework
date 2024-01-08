@@ -12,14 +12,21 @@ func NewApplication() (err error) {
 
 	dialectal := mysql.Open(dns())
 
-	if facades.Gorm, err = gorm.Open(dialectal, &gorm.Config{
+	cfg := gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
 			TablePrefix: facades.Cfg.GetString("database.mysql.prefix"),
 		},
-		Logger:                 logger.Default.LogMode(logger.Info),
+		Logger:                 logger.Default.LogMode(logger.Error),
 		SkipDefaultTransaction: true,
-		PrepareStmt:            !facades.Cfg.GetBool("app.debug"),
-	}); err != nil {
+		PrepareStmt:            false,
+	}
+
+	if facades.Cfg.GetBool("server.debug") {
+		cfg.Logger = logger.Default.LogMode(logger.Info)
+		cfg.PrepareStmt = true
+	}
+
+	if facades.Gorm, err = gorm.Open(dialectal, &cfg); err != nil {
 		return err
 	}
 

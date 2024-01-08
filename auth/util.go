@@ -36,23 +36,23 @@ func NameOfPermission(platform uint16, id *string, permission string) (permissio
 	return permissions
 }
 
-func NameOfRoleWithDeveloper() string {
+func NameOfDeveloper() string {
 	return NameOfRole(auth.CodeOfDeveloper)
 }
 
-func NameOfRoleWithPlatform() string {
+func NameOfPlatform() string {
 	return NameOfRole(auth.CodeOfPlatform)
 }
 
-func NameOfRoleWithClique() string {
+func NameOfClique() string {
 	return NameOfRole(auth.CodeOfClique)
 }
 
-func NameOfRoleWithRegion() string {
+func NameOfRegion() string {
 	return NameOfRole(auth.CodeOfRegion)
 }
 
-func NameOfRoleWithStore() string {
+func NameOfStore() string {
 	return NameOfRole(auth.CodeOfStore)
 }
 

@@ -14,5 +14,5 @@ func Keys(key string, keys ...any) string {
 		items = append(items, fmt.Sprintf("%v", item))
 	}
 
-	return facades.Cfg.GetString("app.name") + ":locker:" + strings.Join(items, ":")
+	return facades.Cfg.GetString("server.name") + ":locker:" + strings.Join(items, ":")
 }

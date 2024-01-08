@@ -52,8 +52,11 @@ func (app *Application) Env(key string, defaultValue ...any) any {
 }
 
 func (app *Application) Add(name string, configuration map[string]any) {
-	//dump.P(app.vip.Get("database"))
 	app.vip.Set(name, configuration)
+}
+
+func (app *Application) Set(key string, configuration any) {
+	app.vip.Set(key, configuration)
 }
 
 func (app *Application) Get(key string, defaultValue ...any) any {

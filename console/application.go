@@ -37,7 +37,7 @@ func (app *Application) getBasicConsoles() []console.Provider {
 
 func (app *Application) getConfiguredConsoles() []console.Provider {
 
-	if cons, ok := facades.Cfg.Get("app.consoles").([]console.Provider); ok {
+	if cons, ok := facades.Cfg.Get("server.consoles").([]console.Provider); ok {
 		return cons
 	}
 

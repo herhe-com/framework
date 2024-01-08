@@ -1,157 +1,179 @@
 package auth
 
 import (
+	"errors"
+	"fmt"
 	"github.com/herhe-com/framework/contracts/auth"
+	"github.com/herhe-com/framework/facades"
+	"github.com/samber/lo"
 	"strings"
 )
 
-// HandlerPermissionsByTrees 将权限处理成可用权限树。
-// permissions：需要处理的权限；
-// platform：所处平台；
-// codes：需要添加的权限 CODE；
-// pms：当前用户权限；
-// all：忽略用户权限校验，返回所有可用权限；
-// caches：被转化成 map 类型的用户权限，默认不传。程序自动从 pms 转化；
-func HandlerPermissionsByTrees(permissions []auth.Permission, platform uint16, codes, pms []string, all bool, caches ...map[string]string) (results []auth.PermissionOfTrees) {
+func toTrees() error {
 
-	var cache map[string]string
+	var trees []auth.Tree
 
-	if !all && len(caches) <= 0 {
-		cache = make(map[string]string, 0)
+	permissions, ok := facades.Cfg.Get("auth.permissions").([]auth.Permission)
 
-		for _, item := range pms {
-			cache[item] = item
-		}
-	} else if len(caches) > 0 {
-		cache = caches[0]
-	}
+	if ok {
 
-	for _, item := range permissions {
+		var prefix []string
 
-		code := append(codes, item.Code)
+		platforms, _ := facades.Cfg.Get("auth.platforms", []uint16{auth.CodeOfStore}).([]uint16)
 
-		result := auth.PermissionOfTrees{
-			Code:     strings.Join(code, "."),
-			Name:     item.Name,
-			Children: HandlerPermissionsByTrees(item.Children, platform, code, nil, all, cache),
+		mark := lo.CountBy(platforms, func(item uint16) bool {
+			return !lo.Contains([]uint16{auth.CodeOfPlatform, auth.CodeOfClique, auth.CodeOfStore}, item)
+		})
+
+		if mark > 0 {
+			return errors.New("platform configuration failed")
 		}
 
-		// 标记该权限是否有该平台
-		markPlatform := false
-		markPermission := false
+		platforms = append(platforms, auth.CodeOfRegion)
 
-		if item.Common {
-			markPlatform = true
-		} else if len(item.Platforms) > 0 {
-			//	判断底层权限是否包含该平台
-			for _, value := range item.Platforms {
-				if value == platform {
-					markPlatform = true
-				}
-			}
-		} else if len(result.Children) > 0 {
-			//	判断中层权限目录是否有子内容返回
-			markPlatform = true
-			markPermission = true
-		}
+		trees = doTrees(permissions, prefix, platforms)
 
-		if markPlatform && !markPermission {
+		if len(trees) > 0 {
 
-			if all {
-				markPermission = true
-			} else {
-				if _, ok := cache[result.Code]; ok {
-					markPermission = true
-				}
+			for _, platform := range platforms {
+
+				key := fmt.Sprintf("%s.module.%d", "auth", platform)
+
+				facades.Cfg.Set(key, doModules(trees, platform))
 			}
 		}
 
-		if markPlatform && markPermission {
-			results = append(results, result)
-		}
+		facades.Cfg.Set("auth.trees", trees)
 	}
 
-	return results
+	return nil
 }
 
-// HandlerPermissions 将权限处理成权限列表。
-// permissions：需要处理的权限；
-// platform：所处平台；
-// codes：需要添加的权限 CODE；
-// pms：当前用户权限；
-// all：忽略用户权限校验，返回所有可用权限；
-// caches：被转化成 map 类型的用户权限，默认不传。程序自动从 pms 转化；
-func HandlerPermissions(permissions []auth.Permission, platform uint16, codes, pms []string, all bool) (results []auth.PermissionsOfSimple) {
+func Trees(platform uint16, permissions ...[]string) []auth.Tree {
 
-	handlers := HandlerPermissionsByTrees(permissions, platform, codes, pms, all)
+	all, _ := facades.Cfg.Get("auth.trees").([]auth.Tree)
 
-	return HandlerPermissionsOfEnd(handlers)
-}
+	var permission []string
 
-func HandlerPermissionsByParent(permissions []auth.Permission, platform uint16, codes []string) (results []auth.PermissionsOfSimple) {
-
-	handlers := HandlerPermissionsByTrees(permissions, platform, nil, nil, true)
-
-	return handlerPermissionByParent(handlers, codes, false)
-}
-
-func handlerPermissionByParent(permissions []auth.PermissionOfTrees, codes []string, parent bool, caches ...map[string]string) (results []auth.PermissionsOfSimple) {
-
-	var cache map[string]string
-	//	将 Code 数组转化为 Map 提高查询速度
-	if len(caches) > 0 {
-		cache = caches[0]
-	} else {
-		cache = make(map[string]string)
-		for _, item := range codes {
-			cache[item] = item
-		}
+	if len(permissions) > 0 {
+		permission = permissions[0]
 	}
 
-	for _, item := range permissions {
+	return filter(all, platform, permission, false)
+}
 
-		p := parent
+func Modules(platform uint16) []auth.Module {
 
-		//	查询权限是否被包含
-		if _, ok := cache[item.Code]; ok {
-			if len(item.Children) > 0 {
-				//	子级下的所有权限均为授权权限
-				p = true
-			} else {
-				//	本身已为最终授权权限，直接赋值通过
-				results = append(results, auth.PermissionsOfSimple{
-					Code: item.Code,
-					Name: item.Name,
-				})
-			}
-		}
+	key := fmt.Sprintf("%s.module.%d", "auth", platform)
+
+	modules, _ := facades.Cfg.Get(key).([]auth.Module)
+
+	return modules
+}
+
+// filter
+//
+//	@Description: 		过滤出权限树
+//	@param trees		需要过滤的权限组
+//	@param permissions	已存在的权限
+//	@param ep		是否允许空已存权限
+//	@return results
+func filter(trees []auth.Tree, platform uint16, permissions []string, ep bool) (results []auth.Tree) {
+
+	for _, item := range trees {
+
+		mark := false
 
 		if len(item.Children) > 0 {
-			results = append(results, handlerPermissionByParent(item.Children, codes, p, cache)...)
-		} else if parent {
-			results = append(results, auth.PermissionsOfSimple{
-				Code: item.Code,
-				Name: item.Name,
-			})
+
+			item.Children = filter(item.Children, platform, permissions, ep)
+
+			if len(item.Children) > 0 {
+				mark = true
+			}
+		} else if ep && len(permissions) <= 0 {
+			mark = true
+		} else if lo.Contains(permissions, item.Code) {
+
+			if platform > 0 {
+				if lo.Contains(item.Platforms, platform) {
+					mark = true
+				}
+			} else {
+				mark = true
+			}
 		}
 
+		if mark {
+			item.Platforms = nil
+			results = append(results, item)
+		}
 	}
 
 	return results
 }
 
-func HandlerPermissionsOfEnd(permissions []auth.PermissionOfTrees) (results []auth.PermissionsOfSimple) {
+func doTrees(permissions []auth.Permission, prefix []string, defaultPlatforms []uint16) (trees []auth.Tree) {
 
 	for _, item := range permissions {
-		if len(item.Children) <= 0 {
-			results = append(results, auth.PermissionsOfSimple{
-				Code: item.Code,
-				Name: item.Name,
-			})
-		} else {
-			results = append(results, HandlerPermissionsOfEnd(item.Children)...)
+
+		codes := append(prefix, item.Code)
+
+		tree := auth.Tree{
+			Name:     item.Name,
+			Code:     strings.Join(codes, "."),
+			Children: doTrees(item.Children, codes, defaultPlatforms),
+		}
+
+		if len(tree.Children) <= 0 {
+
+			if item.Common {
+				tree.Platforms = defaultPlatforms
+			} else if len(item.Platforms) > 0 {
+				tree.Platforms = item.Platforms
+			}
+		}
+
+		trees = append(trees, tree)
+	}
+
+	return trees
+}
+
+func doModules(trees []auth.Tree, platform uint16) (modules []auth.Module) {
+
+	for _, item := range trees {
+
+		permissions := doList(item.Children, platform)
+
+		if len(permissions) > 0 {
+
+			module := auth.Module{
+				Code:        item.Code,
+				Name:        item.Name,
+				Permissions: permissions,
+			}
+
+			modules = append(modules, module)
 		}
 	}
 
-	return results
+	return modules
+}
+
+func doList(permissions []auth.Tree, platform uint16) (list []string) {
+
+	for _, item := range permissions {
+
+		if len(item.Children) > 0 {
+
+			if resp := doList(item.Children, platform); len(resp) > 0 {
+				list = append(list, resp...)
+			}
+		} else if lo.Contains(item.Platforms, platform) {
+			list = append(list, item.Code)
+		}
+	}
+
+	return list
 }

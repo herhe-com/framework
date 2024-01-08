@@ -1,10 +1,44 @@
 package validation
 
 import (
+	"github.com/go-playground/locales"
+	"github.com/go-playground/locales/ar"
+	"github.com/go-playground/locales/en"
+	"github.com/go-playground/locales/es"
+	"github.com/go-playground/locales/fa"
+	"github.com/go-playground/locales/fr"
+	"github.com/go-playground/locales/id"
+	"github.com/go-playground/locales/it"
+	"github.com/go-playground/locales/ja"
+	"github.com/go-playground/locales/lv"
+	"github.com/go-playground/locales/nl"
+	"github.com/go-playground/locales/pt"
+	"github.com/go-playground/locales/pt_BR"
+	"github.com/go-playground/locales/ru"
+	"github.com/go-playground/locales/tr"
+	"github.com/go-playground/locales/vi"
 	"github.com/go-playground/locales/zh"
+	"github.com/go-playground/locales/zh_Hant"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
+	arTranslation "github.com/go-playground/validator/v10/translations/ar"
+	enTranslation "github.com/go-playground/validator/v10/translations/en"
+	esTranslation "github.com/go-playground/validator/v10/translations/es"
+	faTranslation "github.com/go-playground/validator/v10/translations/fa"
+	frTranslation "github.com/go-playground/validator/v10/translations/fr"
+	idTranslation "github.com/go-playground/validator/v10/translations/id"
+	itTranslation "github.com/go-playground/validator/v10/translations/it"
+	jaTranslation "github.com/go-playground/validator/v10/translations/ja"
+	lvTranslation "github.com/go-playground/validator/v10/translations/lv"
+	nlTranslation "github.com/go-playground/validator/v10/translations/nl"
+	ptTranslation "github.com/go-playground/validator/v10/translations/pt"
+	ptBRTranslation "github.com/go-playground/validator/v10/translations/pt_BR"
+	ruTranslation "github.com/go-playground/validator/v10/translations/ru"
+	trTranslation "github.com/go-playground/validator/v10/translations/tr"
+	viTranslation "github.com/go-playground/validator/v10/translations/vi"
 	zhTranslation "github.com/go-playground/validator/v10/translations/zh"
+	zhTWTranslation "github.com/go-playground/validator/v10/translations/zh_tw"
+	"github.com/gookit/color"
 	"github.com/herhe-com/framework/facades"
 	"github.com/hertz-contrib/binding/go_playground"
 	"reflect"
@@ -20,11 +54,10 @@ func NewApplication() {
 
 	valid.SetValidateTag("valid")
 
-	//注册翻译器
-	chinese := zh.New()
-	uni := ut.New(chinese, chinese)
+	tran, language := translator()
 
-	trans, _ = uni.GetTranslator("zh")
+	uni := ut.New(tran, tran)
+	trans, _ = uni.GetTranslator(language)
 
 	////获取 CloudWeGo 的校验器
 	vd := valid.Engine().(*validator.Validate)
@@ -33,75 +66,97 @@ func NewApplication() {
 		return field.Tag.Get("label")
 	})
 
-	registerRules(vd)
-
-	registerTranslation(vd)
+	if err := register(vd, trans, language); err != nil {
+		color.Warnf("validator register error: %v", err)
+	}
 
 	//注册翻译器
-	_ = zhTranslation.RegisterDefaultTranslations(vd, trans)
+	translations(vd, trans, language)
 
 	facades.Validator = valid
 }
 
-func registerRules(vd *validator.Validate) {
+func translator() (translator locales.Translator, language string) {
 
-	_ = vd.RegisterValidation("captcha", captcha)
-	_ = vd.RegisterValidation("idCard", idCard)
-	_ = vd.RegisterValidation("mobile", mobile)
-	_ = vd.RegisterValidation("dirs", dirs)
-	_ = vd.RegisterValidation("username", username)
-	_ = vd.RegisterValidation("password", password)
-	_ = vd.RegisterValidation("snowflake", snowflake)
+	language = facades.Cfg.GetString("server.language", "en")
+
+	switch language {
+	case "ar":
+		translator = ar.New()
+	case "es":
+		translator = es.New()
+	case "fa":
+		translator = fa.New()
+	case "fr":
+		translator = fr.New()
+	case "id":
+		translator = id.New()
+	case "it":
+		translator = it.New()
+	case "ja":
+		translator = ja.New()
+	case "lv":
+		translator = lv.New()
+	case "nl":
+		translator = nl.New()
+	case "pt":
+		translator = pt.New()
+	case "pt_BR":
+		translator = pt_BR.New()
+	case "ru":
+		translator = ru.New()
+	case "tr":
+		translator = tr.New()
+	case "vi":
+		translator = vi.New()
+	case "zh":
+		translator = zh.New()
+	case "zh_tw":
+		translator = zh_Hant.New()
+	default:
+		translator = en.New()
+		language = "en"
+	}
+
+	return translator, language
 }
 
-func registerTranslation(vd *validator.Validate) {
+func translations(vd *validator.Validate, trans ut.Translator, language string) {
 
-	_ = vd.RegisterTranslation("idCard", trans, func(ut ut.Translator) error {
-		return ut.Add("idCard", "身份证号格式错误", true)
-	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("idCard")
-		return t
-	})
-
-	_ = vd.RegisterTranslation("captcha", trans, func(ut ut.Translator) error {
-		return ut.Add("captcha", "The Captcha format is incorrect", true)
-	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("captcha")
-		return t
-	})
-
-	_ = vd.RegisterTranslation("mobile", trans, func(ut ut.Translator) error {
-		return ut.Add("mobile", "手机号格式错误", true)
-	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("mobile")
-		return t
-	})
-
-	_ = vd.RegisterTranslation("dirs", trans, func(ut ut.Translator) error {
-		return ut.Add("dirs", "文件夹格式错误", true)
-	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("dirs")
-		return t
-	})
-
-	_ = vd.RegisterTranslation("username", trans, func(ut ut.Translator) error {
-		return ut.Add("username", "请输入 6-32 位的英文字母数字以及 -_ 等字符", true)
-	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("username")
-		return t
-	})
-
-	_ = vd.RegisterTranslation("password", trans, func(ut ut.Translator) error {
-		return ut.Add("password", "请输入 6-32 位的英文字母数字以及 -_@$&%! 等特殊字符", true)
-	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("password")
-		return t
-	})
-
-	_ = vd.RegisterTranslation("snowflake", trans, func(ut ut.Translator) error {
-		return ut.Add("snowflake", "雪花 ID 格式错误", true)
-	}, func(ut ut.Translator, fe validator.FieldError) string {
-		t, _ := ut.T("snowflake")
-		return t
-	})
+	switch language {
+	case "ar":
+		_ = arTranslation.RegisterDefaultTranslations(vd, trans)
+	case "es":
+		_ = esTranslation.RegisterDefaultTranslations(vd, trans)
+	case "fa":
+		_ = faTranslation.RegisterDefaultTranslations(vd, trans)
+	case "fr":
+		_ = frTranslation.RegisterDefaultTranslations(vd, trans)
+	case "id":
+		_ = idTranslation.RegisterDefaultTranslations(vd, trans)
+	case "it":
+		_ = itTranslation.RegisterDefaultTranslations(vd, trans)
+	case "ja":
+		_ = jaTranslation.RegisterDefaultTranslations(vd, trans)
+	case "lv":
+		_ = lvTranslation.RegisterDefaultTranslations(vd, trans)
+	case "nl":
+		_ = nlTranslation.RegisterDefaultTranslations(vd, trans)
+	case "pt":
+		_ = ptTranslation.RegisterDefaultTranslations(vd, trans)
+	case "pt_BR":
+		_ = ptBRTranslation.RegisterDefaultTranslations(vd, trans)
+	case "ru":
+		_ = ruTranslation.RegisterDefaultTranslations(vd, trans)
+	case "tr":
+		_ = trTranslation.RegisterDefaultTranslations(vd, trans)
+	case "vi":
+		_ = viTranslation.RegisterDefaultTranslations(vd, trans)
+	case "zh":
+		_ = zhTranslation.RegisterDefaultTranslations(vd, trans)
+	case "zh_tw":
+		_ = zhTWTranslation.RegisterDefaultTranslations(vd, trans)
+	default:
+		_ = enTranslation.RegisterDefaultTranslations(vd, trans)
+	}
 }

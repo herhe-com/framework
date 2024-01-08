@@ -94,7 +94,7 @@ func DoRoleOfRefresh(ctx context.Context, user string) (err error) {
 
 func RoleOfName(id string) string {
 
-	name := facades.Cfg.GetString("app.name")
+	name := facades.Cfg.GetString("server.name")
 
 	return name + ":" + "role" + ":" + id
 }

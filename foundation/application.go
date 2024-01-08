@@ -32,7 +32,7 @@ func (a *Application) Boot() {
 
 func (a *Application) SetLocation() {
 
-	loc, _ := time.LoadLocation(facades.Cfg.GetString("app.location"))
+	loc, _ := time.LoadLocation(facades.Cfg.GetString("server.location"))
 
 	time.Local = loc
 }
@@ -45,7 +45,7 @@ func (a *Application) getBasicServiceProviders() []service.Provider {
 
 func (a *Application) getConfiguredServiceProviders() []service.Provider {
 
-	if providers, ok := facades.Cfg.Get("app.providers").([]service.Provider); ok {
+	if providers, ok := facades.Cfg.Get("server.providers").([]service.Provider); ok {
 		return providers
 	}
 

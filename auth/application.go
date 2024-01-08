@@ -26,5 +26,5 @@ func NewApplication() error {
 		return err
 	}
 
-	return nil
+	return toTrees()
 }

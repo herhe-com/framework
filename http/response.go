@@ -63,39 +63,10 @@ func BadRequest(ctx *app.RequestContext, message any, a ...any) {
 	})
 }
 
-func BadRequestWithoutTranslate(ctx *app.RequestContext, message any, a ...any) {
-
-	msg := "bad request"
-
-	switch message.(type) {
-	case error:
-
-		if err, ok := message.(validator.ValidationErrors); ok {
-			msg = validation.ErrorWithoutTranslate(err)
-		} else {
-			msg = fmt.Sprintf("%s: %v", msg, message)
-		}
-	case string:
-
-		msg = message.(string)
-
-		if len(a) > 0 {
-			msg = fmt.Sprintf(msg, a...)
-		}
-	default:
-		msg = fmt.Sprintf("%s: %v", msg, message)
-	}
-
-	ctx.JSON(http.StatusOK, response.Response[any]{
-		Code:    40000,
-		Message: msg,
-	})
-}
-
 func Login(ctx *app.RequestContext) {
 	ctx.JSON(http.StatusOK, response.Response[any]{
 		Code:    40100,
-		Message: "登陆失败",
+		Message: "Login failed",
 	})
 }
 

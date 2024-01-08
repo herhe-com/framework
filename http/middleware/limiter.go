@@ -10,13 +10,14 @@ import (
 )
 
 func Limiter(option *LimiterOption) app.HandlerFunc {
+
 	return func(c context.Context, ctx *app.RequestContext) {
 
 		path := string(ctx.URI().Path())
 
 		var limit int64 = 3
 		expiration := time.Minute
-		generator := fmt.Sprintf("%s:limit:%s:%s", facades.Cfg.GetString("app.name"), path, ctx.ClientIP())
+		generator := fmt.Sprintf("%s:limit:%s:%s", facades.Cfg.GetString("server.name"), path, ctx.ClientIP())
 
 		if option != nil {
 

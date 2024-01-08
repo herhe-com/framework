@@ -19,7 +19,7 @@ func (*ServerProvider) Register() console.Console {
 		Name: "启动程序",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			hp := net.JoinHostPort(facades.Cfg.GetString("app.address"), facades.Cfg.GetString("app.port"))
+			hp := net.JoinHostPort(facades.Cfg.GetString("server.address"), facades.Cfg.GetString("server.port"))
 
 			options := []config.Option{
 				server.WithHostPorts(hp),
@@ -29,27 +29,27 @@ func (*ServerProvider) Register() console.Console {
 				options = append(options, server.WithCustomValidator(facades.Validator))
 			}
 
-			if facades.Cfg.GetBool("app.debug") {
+			if facades.Cfg.GetBool("server.debug") {
 				options = append(options, server.WithExitWaitTime(1))
 			} else {
 				options = append(options, server.WithDisablePrintRoute(true))
 			}
 
-			if option, ok := facades.Cfg.Get("app.server.options").([]config.Option); ok {
+			if option, ok := facades.Cfg.Get("server.options").([]config.Option); ok {
 				options = append(options, option...)
 			}
 
 			serv := server.Default(options...)
 
-			if middlewares, ok := facades.Cfg.Get("app.server.middlewares").([]app.HandlerFunc); ok {
+			if middlewares, ok := facades.Cfg.Get("server.middlewares").([]app.HandlerFunc); ok {
 				serv.Use(middlewares...)
 			}
 
-			if route, ok := facades.Cfg.Get("app.server.route").(func(route *server.Hertz)); ok {
+			if route, ok := facades.Cfg.Get("server.route").(func(route *server.Hertz)); ok {
 				route(serv)
 			}
 
-			if handle, ok := facades.Cfg.Get("app.server.handle").(func(s *server.Hertz)); ok {
+			if handle, ok := facades.Cfg.Get("server.handle").(func(s *server.Hertz)); ok {
 				handle(serv)
 			}
 

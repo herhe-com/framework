@@ -2,11 +2,12 @@ package scope
 
 import (
 	"fmt"
-	"github.com/herhe-com/framework/contracts/auth"
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/herhe-com/framework/auth"
 	"gorm.io/gorm"
 )
 
-func Platform(platform auth.RoleOfCache, tables ...string) func(db *gorm.DB) *gorm.DB {
+func Platform(ctx *app.RequestContext, tables ...string) func(db *gorm.DB) *gorm.DB {
 
 	table := ""
 
@@ -16,25 +17,13 @@ func Platform(platform auth.RoleOfCache, tables ...string) func(db *gorm.DB) *go
 
 	return func(db *gorm.DB) *gorm.DB {
 
-		query := "`platform`=?"
-
-		if platform.CheckId() {
-			query += " and `platform_id`=?"
-		}
+		query := "`platform`=? and `platform_id`=?"
 
 		if len(tables) > 0 {
-			query = fmt.Sprintf("`%s`.`platform`=?", table)
-
-			if platform.CheckId() {
-				query += fmt.Sprintf(" and `%s`.`platform_id`=?", table)
-			}
+			query = fmt.Sprintf("`%s`.`platform`=? and `%s`.`platform_id`=?", table, table)
 		}
 
-		if platform.CheckId() {
-			db.Where(query, platform.Platform, platform.Id)
-		} else {
-			db.Where(query, platform.Platform)
-		}
+		db.Where(query, auth.Platform(ctx), auth.PlatformID(ctx))
 
 		return db
 	}

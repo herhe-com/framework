@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/golang-module/carbon/v2"
 	"github.com/golang-module/dongle"
+	"github.com/herhe-com/framework/contracts/auth"
 	"github.com/herhe-com/framework/facades"
 	"github.com/herhe-com/framework/support/str"
 	"github.com/redis/go-redis/v9"
@@ -15,7 +17,64 @@ import (
 	"time"
 )
 
-func MakeJWT(claims jwt.RegisteredClaims, secrets ...string) (token string, err error) {
+// NewJWToken
+//
+//	@Description: 生成 JWT
+//	@param sub 	发放对象
+//	@param id	用户
+//	@param lifetime 	生存时间（分钟）
+//	@param refresh 	是否可被刷新
+//	@param ext	扩展变量
+//	@param platform	平台变量
+//
+// NewJWToken
+func NewJWToken(sub, id string, lifetime int, refresh bool, ext map[string]any, platform ...uint16) (token string, err error) {
+
+	now := carbon.Now()
+
+	claims := auth.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    Issuer(sub),
+			Subject:   id,
+			IssuedAt:  jwt.NewNumericDate(now.ToStdTime()),
+			NotBefore: jwt.NewNumericDate(now.ToStdTime()),
+			ExpiresAt: jwt.NewNumericDate(now.AddMinutes(lifetime).ToStdTime()),
+		},
+		Refresh: refresh,
+		Ext:     ext,
+	}
+
+	if len(platform) > 0 {
+		claims.Platform = platform[0]
+	}
+
+	return MakeJWToken(claims)
+}
+
+func BlacklistOfJwtName(ctx *app.RequestContext) string {
+	return KeyBlacklist("jwt", Claims(ctx).ID)
+}
+
+func BlacklistOfJwtValue(c context.Context, ctx *app.RequestContext) (bool, error) {
+
+	claims := Claims(ctx)
+
+	if claims == nil {
+		return true, errors.New("claims cannot be null")
+	}
+
+	if facades.Redis == nil {
+		return true, errors.New("redis cannot be null")
+	}
+
+	now := carbon.Now()
+
+	expires := Claims(ctx).ExpiresAt.Sub(now.ToStdTime()) * time.Second
+
+	return Blacklist(c, now.Timestamp(), expires, BlacklistOfJwtName(ctx)), nil
+}
+
+func MakeJWToken(claims auth.Claims, secrets ...string) (token string, err error) {
 
 	var secret string
 
@@ -52,7 +111,7 @@ func MakeJWT(claims jwt.RegisteredClaims, secrets ...string) (token string, err 
 	return token, nil
 }
 
-func CheckJWT(claims *jwt.RegisteredClaims, token, iss string, secrets ...string) (refresh bool, err error) {
+func CheckJWToken(claims *auth.Claims, token, iss string, secrets ...string) (refresh bool, err error) {
 
 	var secret string
 
@@ -68,38 +127,34 @@ func CheckJWT(claims *jwt.RegisteredClaims, token, iss string, secrets ...string
 
 	ok := errors.As(err, &valid)
 
-	if err != nil && !ok {
+	if err != nil || !ok {
 		return false, err
 	}
 
-	if err == nil || valid.Errors > 0 && valid.Is(jwt.ErrTokenExpired) {
+	now := carbon.Now()
 
-		now := carbon.Now()
+	if !claims.VerifyIssuer(Issuer(iss), true) {
+		return false, jwt.ErrTokenUsedBeforeIssued
+	}
 
-		if !claims.VerifyIssuer(Issuer(iss), true) {
-			return false, jwt.ErrTokenUsedBeforeIssued
-		}
+	if !claims.VerifyNotBefore(now.ToStdTime(), true) {
+		return false, jwt.ErrTokenUsedBeforeIssued
+	}
 
-		if !claims.VerifyNotBefore(now.ToStdTime(), true) {
-			return false, jwt.ErrTokenUsedBeforeIssued
-		}
+	if !claims.VerifyExpiresAt(now.ToStdTime(), true) {
+		return false, jwt.ErrTokenExpired
+	}
 
-		if !claims.VerifyExpiresAt(now.ToStdTime(), true) {
+	lifetime := claims.IssuedAt.Sub(claims.ExpiresAt.Time).Seconds()
 
-			lifetime := claims.IssuedAt.Sub(claims.ExpiresAt.Time).Seconds()
-
-			if claims.VerifyExpiresAt(now.SubSeconds(int(lifetime)).ToStdTime(), true) {
-				return true, nil
-			}
-
-			return false, jwt.ErrTokenExpired
-		}
+	if claims.VerifyExpiresAt(now.AddSeconds(int(lifetime)/2).ToStdTime(), true) {
+		return true, nil
 	}
 
 	return false, nil
 }
 
-func RefreshJWT(ctx context.Context, claims *jwt.RegisteredClaims, leeways ...int64) (token string, err error) {
+func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) (token string, err error) {
 
 	if lo.IsEmpty(claims) {
 		return "", errors.New("claims cannot be empty")
@@ -109,11 +164,13 @@ func RefreshJWT(ctx context.Context, claims *jwt.RegisteredClaims, leeways ...in
 
 	var blacklists map[string]string
 
-	blacklists, err = facades.Redis.HGetAll(ctx, bk).Result()
+	if facades.Redis != nil {
+		blacklists, err = facades.Redis.HGetAll(ctx, bk).Result()
+	}
 
 	now := carbon.Now()
 
-	if errors.Is(err, redis.Nil) || len(blacklists) <= 0 {
+	if facades.Redis == nil || errors.Is(err, redis.Nil) || len(blacklists) <= 0 {
 
 		lifetime := claims.IssuedAt.Sub(claims.ExpiresAt.Time).Seconds()
 
@@ -121,7 +178,7 @@ func RefreshJWT(ctx context.Context, claims *jwt.RegisteredClaims, leeways ...in
 		claims.NotBefore = jwt.NewNumericDate(now.ToStdTime())
 		claims.ExpiresAt = jwt.NewNumericDate(now.AddSeconds(int(lifetime)).ToStdTime())
 
-		if token, err = MakeJWT(*claims); err != nil {
+		if token, err = MakeJWToken(*claims); err != nil {
 			return "", err
 		}
 
@@ -191,7 +248,7 @@ func Secret(secrets ...string) (secret string, err error) {
 
 func Issuer(issuer string) string {
 
-	prefix := facades.Cfg.GetString("app.name") + ":"
+	prefix := facades.Cfg.GetString("server.name") + ":"
 
 	if strings.HasPrefix(issuer, prefix) {
 		return issuer

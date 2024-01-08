@@ -6,7 +6,6 @@ import (
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/facades"
-	"github.com/herhe-com/framework/filesystem/local"
 	"github.com/herhe-com/framework/filesystem/minio"
 	"github.com/herhe-com/framework/filesystem/qiniu"
 )
@@ -31,6 +30,7 @@ type Storage struct {
 func NewStorage() *Storage {
 
 	defaultDisk := facades.Cfg.GetString("filesystem.driver")
+
 	if defaultDisk == "" {
 		color.Redln("[filesystem] please set default disk")
 		return nil
@@ -59,8 +59,8 @@ func NewDriver(disk string) (filesystem.Driver, error) {
 	driver := Driver(disk)
 
 	switch driver {
-	case DriverLocal:
-		return local.NewLocal()
+	//case DriverLocal:
+	//	return local.NewLocal()
 	//case DriverOss:
 	//	return NewOss(ctx, disk)
 	//case DriverCos:
@@ -68,22 +68,11 @@ func NewDriver(disk string) (filesystem.Driver, error) {
 	//case DriverS3:
 	//	return NewS3(ctx, disk)
 	case DriverMinio:
-
 		cfg, _ := facades.Cfg.Get("filesystem.minio").(map[string]any)
-
 		return minio.NewMinio(ctx, cfg)
 	case DriverQiniu:
-
 		cfg, _ := facades.Cfg.Get("filesystem.qiniu").(map[string]any)
-
 		return qiniu.NewQiniu(ctx, cfg)
-		//case DriverCustom:
-		//	driver, ok := facades.Cfg.Get(fmt.Sprintf("filesystems.disks.%s.via", disk)).(filesystem.Driver)
-		//	if !ok {
-		//		return nil, fmt.Errorf("init %s disk fail: via must be implement filesystem.Driver", disk)
-		//	}
-
-		//return driver, nil
 	}
 
 	return nil, fmt.Errorf("invalid driver: %s, only support local, minio, qiniu", driver)

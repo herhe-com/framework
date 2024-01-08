@@ -30,7 +30,7 @@ func KeyBlacklist(args ...any) string {
 
 	keys := make([]string, 0)
 
-	keys = append(keys, facades.Cfg.GetString("app.name"))
+	keys = append(keys, facades.Cfg.GetString("server.name"))
 	keys = append(keys, "blacklist")
 
 	for _, item := range args {

@@ -7,7 +7,7 @@ import (
 
 func NewApplication() (err error) {
 
-	facades.Snowflake, err = snowflake.NewNode(facades.Cfg.GetInt64("app.node"))
+	facades.Snowflake, err = snowflake.NewNode(facades.Cfg.GetInt64("server.node"))
 
 	if err != nil {
 		return err

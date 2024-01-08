@@ -8,7 +8,7 @@ import (
 
 func Keys(args ...any) string {
 
-	name := facades.Cfg.GetString("app.name")
+	name := facades.Cfg.GetString("server.name")
 
 	names := make([]string, 0)
 
