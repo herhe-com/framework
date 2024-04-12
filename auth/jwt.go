@@ -28,7 +28,7 @@ import (
 //	@param platform	平台变量
 //
 // NewJWToken
-func NewJWToken(sub, id string, lifetime int, refresh bool, ext map[string]any, platform ...uint16) (token string, err error) {
+func NewJWToken(sub, id string, organization, clique *string, lifetime int, refresh bool, ext map[string]any, platform ...uint16) (token string, err error) {
 
 	now := carbon.Now()
 
@@ -40,8 +40,13 @@ func NewJWToken(sub, id string, lifetime int, refresh bool, ext map[string]any, 
 			NotBefore: jwt.NewNumericDate(now.ToStdTime()),
 			ExpiresAt: jwt.NewNumericDate(now.AddMinutes(lifetime).ToStdTime()),
 		},
-		Refresh: refresh,
-		Ext:     ext,
+		Organization: organization,
+		Refresh:      refresh,
+		Ext:          ext,
+	}
+
+	if clique != nil {
+		claims.Clique = clique
 	}
 
 	if len(platform) > 0 {

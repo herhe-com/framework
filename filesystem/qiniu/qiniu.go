@@ -42,11 +42,11 @@ func NewQiniu(ctx context.Context, configs map[string]any) (*Qiniu, error) {
 
 	cfg := viper.New()
 
-	cfg.Set("minio", configs)
+	cfg.Set("qiniu", configs)
 
 	cfg.SetDefault("qiniu.delimiter", "/")
 
-	server := cfg.GetString("server.name")
+	server := facades.Cfg.GetString("server.name")
 	access := cfg.GetString("qiniu.access")
 	secret := cfg.GetString("qiniu.secret")
 	bucket := cfg.GetString("qiniu.bucket")
@@ -326,9 +326,9 @@ func (r *Qiniu) SetKey(key string) {
 
 func (r *Qiniu) Url(uri string) string {
 
-	realUrl := strings.TrimSuffix(r.domain, "/")
+	domain := strings.TrimSuffix(r.domain, "/")
 
-	return realUrl + "/" + r.realPath(uri)
+	return domain + "/" + r.realPath(uri)
 }
 
 func (r *Qiniu) realPath(path string) (realPath string) {
@@ -340,6 +340,8 @@ func (r *Qiniu) realPath(path string) (realPath string) {
 	} else if r.prefix != "" && !strings.HasPrefix(path, r.prefix) {
 		realPath = r.prefix + strings.TrimPrefix(path, r.delimiter)
 	}
+
+	realPath = strings.TrimPrefix(realPath, r.delimiter)
 
 	return realPath
 }

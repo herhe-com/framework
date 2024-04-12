@@ -31,7 +31,7 @@ func (app *Application) getBasicConsoles() []console.Provider {
 
 	return []console.Provider{
 		&consoles.PasswordProvider{},
-		&consoles.SecretProvider{},
+		&consoles.CrontabProvider{},
 	}
 }
 

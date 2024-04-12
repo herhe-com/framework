@@ -32,9 +32,9 @@ func (a *Application) Boot() {
 
 func (a *Application) SetLocation() {
 
-	loc, _ := time.LoadLocation(facades.Cfg.GetString("server.location"))
-
-	time.Local = loc
+	if loc, err := time.LoadLocation(facades.Cfg.GetString("server.location")); err != nil {
+		time.Local = loc
+	}
 }
 
 func (a *Application) getBasicServiceProviders() []service.Provider {

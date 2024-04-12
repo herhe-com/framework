@@ -22,7 +22,8 @@ func Jwt(sub string) app.HandlerFunc {
 				ctx.Set(authConstant.ContextOfID, claims.Subject)
 				ctx.Set(authConstant.ContextOfClaims, claims)
 				ctx.Set(authConstant.ContextOfPlatform, claims.Platform)
-				ctx.Set(authConstant.ContextOfPlatformID, claims.PlatformID)
+				ctx.Set(authConstant.ContextOfOrganization, claims.Organization)
+				ctx.Set(authConstant.ContextOfClique, claims.Clique)
 			}
 
 			if refresh && claims.Refresh {
@@ -36,13 +37,23 @@ func Jwt(sub string) app.HandlerFunc {
 				ctx.Set(authConstant.ContextOfID, claims.Subject)
 				ctx.Set(authConstant.ContextOfClaims, claims)
 				ctx.Set(authConstant.ContextOfPlatform, claims.Platform)
-				ctx.Set(authConstant.ContextOfPlatformID, claims.PlatformID)
+				ctx.Set(authConstant.ContextOfOrganization, claims.Organization)
+				ctx.Set(authConstant.ContextOfClique, claims.Clique)
 
 				ctx.Header(authConstant.Authorization, refreshToken)
 
 				//  获取令牌刷新后的操作
 				if ref, ok := facades.Cfg.Get("auth.refresh").(func(co context.Context, rc *app.RequestContext)); ok {
 					ref(c, ctx)
+				}
+			}
+
+			if auth.Check(ctx) {
+
+				if temporary, _ := auth.Temporary(c, ctx); temporary != nil {
+					ctx.Set(authConstant.ContextOfPlatform, temporary.Platform)
+					ctx.Set(authConstant.ContextOfOrganization, &temporary.Org)
+					ctx.Set(authConstant.ContextOfClique, temporary.Clique)
 				}
 			}
 		}

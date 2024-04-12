@@ -106,7 +106,7 @@ func rules() []rule {
 			pattern:     util.PatternOfSnowflake,
 			translation: "{0} must be a valid snowflake",
 			translations: map[string]string{
-				"zh": "{0}必须是一个有效的雪花 ID",
+				"zh": "{0}必须是一个有效的雪花 Organization",
 			},
 		},
 		{
@@ -158,7 +158,7 @@ func rules() []rule {
 				}
 				return a1Str == signChar
 			},
-			translation: "{0} must be a valid ID Card",
+			translation: "{0} must be a valid Organization Card",
 			translations: map[string]string{
 				"zh": "{0}必须是一个有效的身份证号",
 			},

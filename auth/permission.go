@@ -49,7 +49,7 @@ func toTrees() error {
 	return nil
 }
 
-func Trees(platform uint16, permissions ...[]string) []auth.Tree {
+func Trees(platform uint16, ep bool, permissions ...[]string) []auth.Tree {
 
 	all, _ := facades.Cfg.Get("auth.trees").([]auth.Tree)
 
@@ -59,7 +59,7 @@ func Trees(platform uint16, permissions ...[]string) []auth.Tree {
 		permission = permissions[0]
 	}
 
-	return filter(all, platform, permission, false)
+	return filter(all, platform, permission, ep)
 }
 
 func Modules(platform uint16) []auth.Module {
@@ -91,17 +91,16 @@ func filter(trees []auth.Tree, platform uint16, permissions []string, ep bool) (
 			if len(item.Children) > 0 {
 				mark = true
 			}
-		} else if ep && len(permissions) <= 0 {
-			mark = true
-		} else if lo.Contains(permissions, item.Code) {
+		} else if platform > 0 && lo.Contains(item.Platforms, platform) {
 
-			if platform > 0 {
-				if lo.Contains(item.Platforms, platform) {
-					mark = true
-				}
-			} else {
+			if ep {
+				mark = true
+			} else if lo.Contains(permissions, item.Code) {
 				mark = true
 			}
+
+		} else if !ep && lo.Contains(permissions, item.Code) {
+			mark = true
 		}
 
 		if mark {

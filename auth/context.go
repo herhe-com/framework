@@ -44,13 +44,22 @@ func SPlatform(ctx *app.RequestContext) string {
 	}
 }
 
-func PlatformID(ctx *app.RequestContext) (platform uint) {
+func Organization(ctx *app.RequestContext) (platform *string) {
 
-	if value, exits := ctx.Get(authConstant.ContextOfPlatformID); exits {
-		platform, _ = value.(uint)
+	if value, exits := ctx.Get(authConstant.ContextOfOrganization); exits {
+		platform, _ = value.(*string)
 	}
 
 	return platform
+}
+
+func Clique(ctx *app.RequestContext) (clique *string) {
+
+	if value, exits := ctx.Get(authConstant.ContextOfClique); exits {
+		clique, _ = value.(*string)
+	}
+
+	return clique
 }
 
 func Claims(ctx *app.RequestContext) (claims *authConstant.Claims) {
