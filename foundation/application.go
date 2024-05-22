@@ -32,7 +32,7 @@ func (a *Application) Boot() {
 
 func (a *Application) SetLocation() {
 
-	if loc, err := time.LoadLocation(facades.Cfg.GetString("server.location")); err != nil {
+	if loc, err := time.LoadLocation(facades.Cfg.GetString("server.location")); err == nil {
 		time.Local = loc
 	}
 }
