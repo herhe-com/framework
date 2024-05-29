@@ -17,13 +17,21 @@ func Platform(ctx *app.RequestContext, tables ...string) func(db *gorm.DB) *gorm
 
 	return func(db *gorm.DB) *gorm.DB {
 
-		query := "`platform`=? and `organization_id`=?"
+		organization := auth.Organization(ctx)
 
-		if len(tables) > 0 {
-			query = fmt.Sprintf("`%s`.`platform`=? and `%s`.`organization_id`=?", table, table)
+		if organization == nil {
+
+			db.Where("`platform`=? and `organization_id` is null", auth.Platform(ctx))
+		} else {
+
+			query := "`platform`=? and `organization_id`=?"
+
+			if len(tables) > 0 {
+				query = fmt.Sprintf("`%s`.`platform`=? and `%s`.`organization_id`=?", table, table)
+			}
+
+			db.Where(query, auth.Platform(ctx), *organization)
 		}
-
-		db.Where(query, auth.Platform(ctx), auth.Organization(ctx))
 
 		return db
 	}
