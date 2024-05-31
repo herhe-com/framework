@@ -23,9 +23,9 @@ import (
 //	@param sub 	发放对象
 //	@param id	用户
 //	@param lifetime 	生存时间（分钟）
-//	@param refresh 	是否可被刷新
+//	@param ref 	是否可被刷新
 //	@param ext	扩展变量
-//	@param platform	平台变量
+//	@param plt	平台变量
 //
 // NewJWToken
 func NewJWToken(sub, id string, organization, clique *string, lifetime int, refresh bool, ext map[string]any, platform ...uint16) (token string, err error) {
@@ -36,9 +36,9 @@ func NewJWToken(sub, id string, organization, clique *string, lifetime int, refr
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    Issuer(sub),
 			Subject:   id,
-			IssuedAt:  jwt.NewNumericDate(now.ToStdTime()),
-			NotBefore: jwt.NewNumericDate(now.ToStdTime()),
-			ExpiresAt: jwt.NewNumericDate(now.AddMinutes(lifetime).ToStdTime()),
+			IssuedAt:  jwt.NewNumericDate(now.StdTime()),
+			NotBefore: jwt.NewNumericDate(now.StdTime()),
+			ExpiresAt: jwt.NewNumericDate(now.AddMinutes(lifetime).StdTime()),
 		},
 		Organization: organization,
 		Refresh:      refresh,
@@ -74,7 +74,7 @@ func BlacklistOfJwtValue(c context.Context, ctx *app.RequestContext) (bool, erro
 
 	now := carbon.Now()
 
-	expires := Claims(ctx).ExpiresAt.Sub(now.ToStdTime()) * time.Second
+	expires := Claims(ctx).ExpiresAt.Sub(now.StdTime()) * time.Second
 
 	return Blacklist(c, now.Timestamp(), expires, BlacklistOfJwtName(ctx)), nil
 }
@@ -130,9 +130,7 @@ func CheckJWToken(claims *auth.Claims, token, iss string, secrets ...string) (re
 
 	var valid *jwt.ValidationError
 
-	ok := errors.As(err, &valid)
-
-	if err != nil || !ok {
+	if err != nil && !errors.As(err, &valid) {
 		return false, err
 	}
 
@@ -142,18 +140,21 @@ func CheckJWToken(claims *auth.Claims, token, iss string, secrets ...string) (re
 		return false, jwt.ErrTokenUsedBeforeIssued
 	}
 
-	if !claims.VerifyNotBefore(now.ToStdTime(), true) {
+	if !claims.VerifyNotBefore(now.StdTime(), true) {
 		return false, jwt.ErrTokenUsedBeforeIssued
 	}
 
-	if !claims.VerifyExpiresAt(now.ToStdTime(), true) {
+	if !claims.VerifyExpiresAt(now.StdTime(), true) {
+
+		lifetime := claims.ExpiresAt.Sub(claims.IssuedAt.Time).Seconds()
+
+		claims.ExpiresAt = jwt.NewNumericDate(claims.ExpiresAt.Add(time.Second * time.Duration(lifetime) / 2))
+
+		if claims.VerifyExpiresAt(now.StdTime(), true) {
+			return true, jwt.ErrTokenExpired
+		}
+
 		return false, jwt.ErrTokenExpired
-	}
-
-	lifetime := claims.IssuedAt.Sub(claims.ExpiresAt.Time).Seconds()
-
-	if claims.VerifyExpiresAt(now.AddSeconds(int(lifetime)/2).ToStdTime(), true) {
-		return true, nil
 	}
 
 	return false, nil
@@ -177,11 +178,11 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 
 	if facades.Redis == nil || errors.Is(err, redis.Nil) || len(blacklists) <= 0 {
 
-		lifetime := claims.IssuedAt.Sub(claims.ExpiresAt.Time).Seconds()
+		lifetime := claims.ExpiresAt.Sub(claims.IssuedAt.Time).Seconds()
 
-		claims.IssuedAt = jwt.NewNumericDate(now.ToStdTime())
-		claims.NotBefore = jwt.NewNumericDate(now.ToStdTime())
-		claims.ExpiresAt = jwt.NewNumericDate(now.AddSeconds(int(lifetime)).ToStdTime())
+		claims.IssuedAt = jwt.NewNumericDate(now.StdTime())
+		claims.NotBefore = jwt.NewNumericDate(now.StdTime())
+		claims.ExpiresAt = jwt.NewNumericDate(now.AddSeconds(int(lifetime)).StdTime())
 
 		if token, err = MakeJWToken(*claims); err != nil {
 			return "", err
@@ -195,7 +196,7 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 				return "", err
 			}
 
-			facades.Redis.ExpireAt(ctx, bk, carbon.CreateFromStdTime(claims.ExpiresAt.Time).AddSeconds(int(lifetime)).ToStdTime())
+			facades.Redis.ExpireAt(ctx, bk, carbon.CreateFromStdTime(claims.ExpiresAt.Time).AddSeconds(int(lifetime)).StdTime())
 		}
 
 		return token, nil

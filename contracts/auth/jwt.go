@@ -9,9 +9,9 @@ const (
 type Claims struct {
 	jwt.RegisteredClaims
 
-	Refresh      bool           `json:"refresh,omitempty"`
-	Platform     uint16         `json:"platform,omitempty"`
-	Organization *string        `json:"organization,omitempty"`
-	Clique       *string        `json:"clique,omitempty"`
+	Refresh      bool           `json:"ref,omitempty"`
+	Platform     uint16         `json:"plt,omitempty"`
+	Organization *string        `json:"org,omitempty"`
+	Clique       *string        `json:"clq,omitempty"`
 	Ext          map[string]any `json:"ext,omitempty"`
 }
