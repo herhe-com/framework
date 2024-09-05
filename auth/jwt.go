@@ -136,7 +136,7 @@ func CheckJWToken(claims *auth.Claims, token, iss string, secrets ...string) (re
 
 	var valid *jwt.ValidationError
 
-	if err != nil && !errors.As(err, &valid) {
+	if err != nil && (!errors.As(err, &valid) || !errors.Is(err, jwt.ErrTokenExpired)) {
 		return false, err
 	}
 
