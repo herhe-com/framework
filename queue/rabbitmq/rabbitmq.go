@@ -80,7 +80,7 @@ func (r *RabbitMQ) Producer(data []byte, queue string, routes []string, delays .
 	})
 
 	if len(delays) > 0 {
-		delay = delays[0]
+		delay = lo.Max(delays)
 	}
 
 	var publisher *rabbitmq.Publisher
@@ -107,7 +107,7 @@ func (r *RabbitMQ) Producer(data []byte, queue string, routes []string, delays .
 	opts = append(opts, rabbitmq.WithPublishOptionsExchange(queue))
 
 	if delay > 0 {
-		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(rabbitmq.Table{"x-delay": delay * 60 * 1000}))
+		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(rabbitmq.Table{"x-delay": delay * 1000}))
 	}
 
 	return publisher.Publish(data, routes, opts...)
@@ -143,10 +143,16 @@ func (r *RabbitMQ) Consumer(handler func(data []byte), queue string, delays ...b
 		rabbitmq.WithConsumerOptionsConcurrency(10),
 	}, options...)
 
-	_, err = rabbitmq.NewConsumer(r.conn, func(d rabbitmq.Delivery) (action rabbitmq.Action) {
+	consumer, err := rabbitmq.NewConsumer(r.conn, queue, options...)
+
+	if err != nil {
+		return err
+	}
+
+	err = consumer.Run(func(d rabbitmq.Delivery) (action rabbitmq.Action) {
 		handler(d.Body)
 		return rabbitmq.Ack
-	}, queue, options...)
+	})
 
 	if err != nil {
 		return err

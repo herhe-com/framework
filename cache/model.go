@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gookit/goutil/strutil"
 	"github.com/herhe-com/framework/facades"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
@@ -37,8 +36,8 @@ func (m *Model) clear(tx *gorm.DB) {
 	}
 }
 
-// FindById 优先从缓存中获取模型
-func FindById(ctx context.Context, model any, id any) (err error) {
+// FindByID 优先从缓存中获取模型
+func FindByID(ctx context.Context, model any, id any) (err error) {
 
 	t := reflect.TypeOf(model).Elem()
 
@@ -46,7 +45,7 @@ func FindById(ctx context.Context, model any, id any) (err error) {
 		return errors.New("model must be struct")
 	}
 
-	table := strutil.Snake(t.Name())
+	table := lo.SnakeCase(t.Name())
 
 	result, err := facades.Redis.Get(ctx, keys(table, id)).Result()
 

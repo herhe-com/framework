@@ -1,6 +1,6 @@
 package util
 
 const (
-	EnableOfYes = 1
-	EnableOfNo  = 2
+	Yes uint8 = 1
+	No  uint8 = 2
 )

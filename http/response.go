@@ -9,6 +9,10 @@ import (
 	"net/http"
 )
 
+func ServerError(ctx *app.RequestContext, format string, values ...any) {
+	ctx.String(http.StatusInternalServerError, format, values...)
+}
+
 func String(ctx *app.RequestContext, format string, values ...any) {
 	ctx.String(http.StatusOK, format, values...)
 }

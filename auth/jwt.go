@@ -76,6 +76,12 @@ func BlacklistOfJwtValue(c context.Context, ctx *app.RequestContext) (bool, erro
 
 	expires := Claims(ctx).ExpiresAt.Sub(now.StdTime()) * time.Second
 
+	maxExpired := time.Hour * 24 * 7
+
+	if expires > maxExpired {
+		expires = maxExpired
+	}
+
 	return Blacklist(c, now.Timestamp(), expires, BlacklistOfJwtName(ctx)), nil
 }
 
