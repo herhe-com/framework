@@ -7,6 +7,7 @@ type RoleOfTemporary struct {
 	Organization string           `json:"organization"`
 	Platform     uint16           `json:"platform"` // 平台类型
 	Clique       *string          `json:"clique,omitempty"`
+	Temporary    bool             `json:"temporary,omitempty"`
 	Bak          *RoleOfTemporary `json:"bak,omitempty"` // 返回上层
 }
 

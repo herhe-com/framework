@@ -17,6 +17,11 @@ func Permission(permission string) app.HandlerFunc {
 			return
 		}
 
+		if temporary, _ := auth.Temporary(c, ctx); temporary != nil {
+			ctx.Next(c)
+			return
+		}
+
 		permissions := []any{auth.NameOfUser(auth.ID(ctx)), permission}
 
 		platform := auth.Platform(ctx)

@@ -18,12 +18,12 @@ func NewApplication() (err error) {
 		},
 		Logger:                 logger.Default.LogMode(logger.Error),
 		SkipDefaultTransaction: true,
-		PrepareStmt:            false,
+		PrepareStmt:            true,
 	}
 
 	if facades.Cfg.GetBool("server.debug") {
 		cfg.Logger = logger.Default.LogMode(logger.Info)
-		cfg.PrepareStmt = true
+		cfg.PrepareStmt = false
 	}
 
 	if facades.Gorm, err = gorm.Open(dialectal, &cfg); err != nil {
