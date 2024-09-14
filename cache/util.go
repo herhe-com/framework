@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func keys(args ...any) string {
+func Keys(args ...any) string {
 
 	name := facades.Cfg.GetString("server.name")
 
@@ -22,9 +22,9 @@ func keys(args ...any) string {
 	return strings.Join(names, ":")
 }
 
-func ttl() time.Duration {
+func TTL() time.Duration {
 
-	t := facades.Cfg.GetInt64("cache.ttl")
+	t := facades.Cfg.GetInt64("cache.TTL")
 
 	if t <= 0 {
 		t = 120

@@ -32,7 +32,7 @@ func (m *Model) clear(tx *gorm.DB) {
 	key := id(tx)
 
 	if lo.IsNotEmpty(key) && facades.Redis != nil {
-		facades.Redis.Del(tx.Statement.Context, keys(tx.Statement.Schema.Table, key))
+		facades.Redis.Del(tx.Statement.Context, Keys(tx.Statement.Schema.Table, key))
 	}
 }
 
@@ -47,7 +47,7 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 
 	table := lo.SnakeCase(t.Name())
 
-	result, err := facades.Redis.Get(ctx, keys(table, id)).Result()
+	result, err := facades.Redis.Get(ctx, Keys(table, id)).Result()
 
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return err
@@ -60,7 +60,7 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 
 	if tx.Error == nil {
 		hash, _ := json.Marshal(model)
-		facades.Redis.Set(ctx, keys(table, id), string(hash), ttl())
+		facades.Redis.Set(ctx, Keys(table, id), string(hash), TTL())
 	} else {
 		return tx.Error
 	}
