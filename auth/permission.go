@@ -130,6 +130,8 @@ func doTrees(permissions []auth.Permission, prefix []string, defaultPlatforms []
 				tree.Platforms = defaultPlatforms
 			} else if len(item.Platforms) > 0 {
 				tree.Platforms = item.Platforms
+			} else {
+				tree.Platforms = defaultPlatforms
 			}
 		}
 

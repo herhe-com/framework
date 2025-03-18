@@ -7,11 +7,11 @@ import (
 	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/facades"
 	"github.com/herhe-com/framework/filesystem/util"
-	"github.com/herhe-com/framework/support/str"
 	"github.com/qiniu/go-sdk/v7/auth/qbox"
 	"github.com/qiniu/go-sdk/v7/cdn"
 	"github.com/qiniu/go-sdk/v7/storage"
 	"github.com/redis/go-redis/v9"
+	"github.com/samber/lo"
 	"github.com/spf13/viper"
 	"io"
 	"os"
@@ -261,7 +261,7 @@ func (r *Qiniu) Put(key string, file io.Reader, size int64) (err error) {
 }
 
 func (r *Qiniu) PutFile(filePath string, source filesystem.File) (string, error) {
-	return r.PutFileAs(filePath, source, str.Random(40))
+	return r.PutFileAs(filePath, source, lo.RandomString(40, lo.AlphanumericCharset))
 }
 
 func (r *Qiniu) PutFileAs(filePath string, source filesystem.File, name string) (string, error) {
@@ -305,7 +305,7 @@ func (r *Qiniu) Size(key string) (int64, error) {
 
 func (r *Qiniu) TemporaryUrl(key string, timer time.Duration) (url string, err error) {
 
-	cryptKey := str.Random(8)
+	cryptKey := lo.RandomString(8, lo.AlphanumericCharset)
 
 	deadline := time.Now().Add(timer).Unix()
 

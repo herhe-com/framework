@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/filesystem/util"
-	"github.com/herhe-com/framework/support/str"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/samber/lo"
 	"github.com/spf13/viper"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -223,22 +224,30 @@ func (r *Minio) Path(file string) string {
 	return file
 }
 
-func (r *Minio) Put(key string, file io.Reader, size int64) error {
+func (r *Minio) Put(key string, file io.Reader, size int64) (err error) {
 
-	_, err := r.instance.PutObject(
+	var buffer []byte
+
+	if buffer, err = io.ReadAll(file); err != nil {
+		return err
+	}
+
+	_, err = r.instance.PutObject(
 		r.ctx,
 		r.bucket,
 		key,
-		file,
+		bytes.NewReader(buffer),
 		size,
-		minio.PutObjectOptions{},
+		minio.PutObjectOptions{
+			ContentType: http.DetectContentType(buffer),
+		},
 	)
 
 	return err
 }
 
 func (r *Minio) PutFile(filePath string, source filesystem.File) (string, error) {
-	return r.PutFileAs(filePath, source, str.Random(40))
+	return r.PutFileAs(filePath, source, lo.RandomString(40, lo.AlphanumericCharset))
 }
 
 func (r *Minio) PutFileAs(filePath string, source filesystem.File, name string) (string, error) {

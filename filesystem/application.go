@@ -10,16 +10,13 @@ import (
 	"github.com/herhe-com/framework/filesystem/qiniu"
 )
 
-type Driver string
-
 const (
-	DriverLocal  Driver = "local"
-	DriverS3     Driver = "s3"
-	DriverOss    Driver = "oss"
-	DriverCos    Driver = "cos"
-	DriverMinio  Driver = "minio"
-	DriverQiniu  Driver = "qiniu"
-	DriverCustom Driver = "custom"
+	DriverS3     string = "s3"
+	DriverOss    string = "oss"
+	DriverCos    string = "cos"
+	DriverMinio  string = "minio"
+	DriverQiniu  string = "qiniu"
+	DriverCustom string = "custom"
 )
 
 type Storage struct {
@@ -52,15 +49,11 @@ func NewStorage() *Storage {
 	}
 }
 
-func NewDriver(disk string) (filesystem.Driver, error) {
+func NewDriver(driver string) (filesystem.Driver, error) {
 
 	ctx := context.Background()
 
-	driver := Driver(disk)
-
 	switch driver {
-	//case DriverLocal:
-	//	return local.NewLocal()
 	//case DriverOss:
 	//	return NewOss(ctx, disk)
 	//case DriverCos:

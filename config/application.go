@@ -87,6 +87,34 @@ func (app *Application) GetString(key string, defaultValue ...string) string {
 	return app.vip.GetString(key)
 }
 
+func (app *Application) GetStrings(key string, defaultValue ...[]string) []string {
+
+	if !app.vip.IsSet(key) {
+
+		if len(defaultValue) > 0 {
+			return defaultValue[0]
+		}
+
+		return nil
+	}
+
+	return app.vip.GetStringSlice(key)
+}
+
+func (app *Application) GetMaps(key string, defaultValue ...map[string]any) map[string]any {
+
+	if !app.vip.IsSet(key) {
+
+		if len(defaultValue) > 0 {
+			return defaultValue[0]
+		}
+
+		return nil
+	}
+
+	return app.vip.GetStringMap(key)
+}
+
 func (app *Application) GetInt(key string, defaultValue ...int) int {
 
 	if !app.vip.IsSet(key) {

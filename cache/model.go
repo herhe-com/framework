@@ -47,6 +47,17 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 
 	table := lo.SnakeCase(t.Name())
 
+	v := reflect.ValueOf(model)
+
+	method := v.MethodByName("TableName")
+
+	if method.IsValid() {
+		values := method.Call(nil)
+		if len(values) == 1 {
+			table = values[0].String()
+		}
+	}
+
 	result, err := facades.Redis.Get(ctx, Keys(table, id)).Result()
 
 	if err != nil && !errors.Is(err, redis.Nil) {

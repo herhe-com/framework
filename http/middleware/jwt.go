@@ -8,7 +8,7 @@ import (
 	"github.com/herhe-com/framework/facades"
 )
 
-func Jwt(sub string) app.HandlerFunc {
+func Jwt() app.HandlerFunc {
 
 	return func(c context.Context, ctx *app.RequestContext) {
 
@@ -16,14 +16,11 @@ func Jwt(sub string) app.HandlerFunc {
 
 			var claims authConstant.Claims
 
-			refresh, err := auth.CheckJWToken(&claims, string(token), sub)
+			refresh, err := auth.CheckJWToken(&claims, string(token))
 
 			if err == nil {
 				ctx.Set(authConstant.ContextOfID, claims.Subject)
 				ctx.Set(authConstant.ContextOfClaims, claims)
-				ctx.Set(authConstant.ContextOfPlatform, claims.Platform)
-				ctx.Set(authConstant.ContextOfOrganization, claims.Organization)
-				ctx.Set(authConstant.ContextOfClique, claims.Clique)
 			}
 
 			if refresh && claims.Refresh {
@@ -36,9 +33,6 @@ func Jwt(sub string) app.HandlerFunc {
 
 				ctx.Set(authConstant.ContextOfID, claims.Subject)
 				ctx.Set(authConstant.ContextOfClaims, claims)
-				ctx.Set(authConstant.ContextOfPlatform, claims.Platform)
-				ctx.Set(authConstant.ContextOfOrganization, claims.Organization)
-				ctx.Set(authConstant.ContextOfClique, claims.Clique)
 
 				ctx.Header(authConstant.Authorization, refreshToken)
 
@@ -48,12 +42,12 @@ func Jwt(sub string) app.HandlerFunc {
 				}
 			}
 
-			if auth.Check(ctx) {
+			callback := facades.Cfg.Get("auth.callback.jwt")
 
-				if temporary, _ := auth.Temporary(c, ctx); temporary != nil {
-					ctx.Set(authConstant.ContextOfPlatform, temporary.Platform)
-					ctx.Set(authConstant.ContextOfOrganization, &temporary.Org)
-					ctx.Set(authConstant.ContextOfClique, temporary.Clique)
+			if callback != nil {
+
+				if callback.(func(c context.Context, ctx *app.RequestContext))(c, ctx); err != nil {
+					return
 				}
 			}
 		}

@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/dromara/carbon/v2"
+	"github.com/dromara/dongle"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/golang-module/carbon/v2"
-	"github.com/golang-module/dongle"
 	"github.com/herhe-com/framework/contracts/auth"
 	"github.com/herhe-com/framework/facades"
-	"github.com/herhe-com/framework/support/str"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
 	"strings"
@@ -20,15 +19,15 @@ import (
 // NewJWToken
 //
 //	@Description: 生成 JWT
-//	@param sub 	发放对象
-//	@param id	用户
-//	@param lifetime 	生存时间（分钟）
+//	@param id 用户
+//	@param lifetime 生存时间（分钟）
 //	@param ref 	是否可被刷新
 //	@param ext	扩展变量
-//	@param plt	平台变量
 //
 // NewJWToken
-func NewJWToken(sub, id string, organization, clique *string, lifetime int, refresh bool, ext map[string]any, platform ...uint16) (token string, err error) {
+func NewJWToken(id string, lifetime int, refresh bool, ext map[string]any) (token string, err error) {
+
+	sub := facades.Cfg.GetString("jwt.sub")
 
 	now := carbon.Now()
 
@@ -40,17 +39,8 @@ func NewJWToken(sub, id string, organization, clique *string, lifetime int, refr
 			NotBefore: jwt.NewNumericDate(now.StdTime()),
 			ExpiresAt: jwt.NewNumericDate(now.AddMinutes(lifetime).StdTime()),
 		},
-		Organization: organization,
-		Refresh:      refresh,
-		Ext:          ext,
-	}
-
-	if clique != nil {
-		claims.Clique = clique
-	}
-
-	if len(platform) > 0 {
-		claims.Platform = platform[0]
+		Refresh: refresh,
+		Ext:     ext,
 	}
 
 	return MakeJWToken(claims)
@@ -122,7 +112,7 @@ func MakeJWToken(claims auth.Claims, secrets ...string) (token string, err error
 	return token, nil
 }
 
-func CheckJWToken(claims *auth.Claims, token, iss string, secrets ...string) (refresh bool, err error) {
+func CheckJWToken(claims *auth.Claims, token string, secrets ...string) (refresh bool, err error) {
 
 	var secret string
 
@@ -142,7 +132,9 @@ func CheckJWToken(claims *auth.Claims, token, iss string, secrets ...string) (re
 
 	now := carbon.Now()
 
-	if !claims.VerifyIssuer(Issuer(iss), true) {
+	sub := facades.Cfg.GetString("jwt.sub")
+
+	if !claims.VerifyIssuer(Issuer(sub), true) {
 		return false, jwt.ErrTokenUsedBeforeIssued
 	}
 
@@ -154,7 +146,11 @@ func CheckJWToken(claims *auth.Claims, token, iss string, secrets ...string) (re
 
 		lifetime := claims.ExpiresAt.Sub(claims.IssuedAt.Time).Seconds()
 
-		claims.ExpiresAt = jwt.NewNumericDate(claims.ExpiresAt.Add(time.Second * time.Duration(lifetime) / 2))
+		if lifetime >= 86400*30 {
+			lifetime = 86400 * 30
+		}
+
+		claims.ExpiresAt = jwt.NewNumericDate(claims.ExpiresAt.Add(time.Second * time.Duration(lifetime)))
 
 		if claims.VerifyExpiresAt(now.StdTime(), true) {
 			return true, jwt.ErrTokenExpired
@@ -271,7 +267,7 @@ func Issuer(issuer string) string {
 
 func id(now time.Time, issuer, subject string) string {
 
-	s := fmt.Sprintf("%s:%s:%d:%s", issuer, subject, now.Unix(), str.Random(32))
+	s := fmt.Sprintf("%s:%s:%d:%s", issuer, subject, now.Unix(), lo.RandomString(32, lo.AlphanumericCharset))
 
 	return dongle.Encrypt.FromString(s).ByMd5().ToHexString()
 }

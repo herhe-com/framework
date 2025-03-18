@@ -8,10 +8,8 @@ import (
 	"github.com/herhe-com/framework/queue/rabbitmq"
 )
 
-type Driver string
-
 const (
-	DriverRabbitmq Driver = "rabbitmq"
+	DriverRabbitmq string = "rabbitmq"
 )
 
 type Queue struct {
@@ -21,21 +19,20 @@ type Queue struct {
 
 func NewQueue() *Queue {
 
-	defaultChannel := facades.Cfg.GetString("queue.driver")
-	if defaultChannel == "" {
-		color.Redln("[queue] please set default driver")
+	defaultDriver := facades.Cfg.GetString("queue.driver")
+	if defaultDriver == "" {
+		color.Errorln("[queue] please set default driver")
 		return nil
 	}
 
-	driver, err := NewDriver(defaultChannel)
+	driver, err := NewDriver(defaultDriver)
 	if err != nil {
-		color.Redf("[queue] %s\n", err)
-
+		color.Errorln("[queue] %s\n", err)
 		return nil
 	}
 
 	drivers := make(map[string]queue.Driver)
-	drivers[defaultChannel] = driver
+	drivers[defaultDriver] = driver
 
 	return &Queue{
 		drivers: drivers,
@@ -43,31 +40,43 @@ func NewQueue() *Queue {
 	}
 }
 
-func NewDriver(dri string) (queue.Driver, error) {
+func NewDriver(driver string, name ...string) (queue.Driver, error) {
 
-	driver := Driver(dri)
+	n := "default"
+
+	if len(name) == 1 && name[0] != "" {
+		n = name[0]
+	}
 
 	switch driver {
 	case DriverRabbitmq:
-		cfg, _ := facades.Cfg.Get("queue.rabbitmq").(map[string]any)
+		cfg, _ := facades.Cfg.Get(fmt.Sprintf("queue.rabbitmq.%s", n)).(map[string]any)
 		return rabbitmq.NewRabbitMQ(cfg)
 	}
 
-	return nil, fmt.Errorf("invalid driver: %s, only support local, minio, qiniu", driver)
+	return nil, fmt.Errorf("invalid driver: %s, only support rabbitmq", driver)
 }
 
-func (r *Queue) Channel(dri string) (queue.Driver, error) {
+func (r *Queue) Channel(driver string, name ...string) (queue.Driver, error) {
 
-	if driver, exist := r.drivers[dri]; exist {
-		return driver, nil
+	n := "default"
+
+	if len(name) == 1 && name[0] != "" {
+		n = name[0]
 	}
 
-	driver, err := NewDriver(dri)
+	key := fmt.Sprintf("%s_%s", driver, n)
+
+	if dri, exist := r.drivers[key]; exist {
+		return dri, nil
+	}
+
+	dri, err := NewDriver(driver, name...)
 	if err != nil {
 		return nil, err
 	}
 
-	r.drivers[dri] = driver
+	r.drivers[key] = dri
 
-	return driver, nil
+	return dri, nil
 }

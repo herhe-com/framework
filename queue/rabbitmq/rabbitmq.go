@@ -1,9 +1,11 @@
 package rabbitmq
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/samber/lo"
+	constnats "github.com/herhe-com/framework/contracts/queue"
+	"github.com/herhe-com/framework/facades"
 	"github.com/spf13/viper"
 	"github.com/wagslane/go-rabbitmq"
 	"strings"
@@ -67,20 +69,10 @@ func (r *RabbitMQ) Conn() (*rabbitmq.Conn, error) {
 	return rabbitmq.NewConn(r.url(), options...)
 }
 
-func (r *RabbitMQ) Producer(data []byte, queue string, routes []string, delays ...int64) (err error) {
+func (r *RabbitMQ) Producer(data []byte, exchange, queue string, routes []string, delay, ttl int64) (err error) {
 
 	if err = r.CheckQueue(queue); err != nil {
 		return err
-	}
-
-	var delay int64 = 0
-
-	delays = lo.Filter(delays, func(item int64, index int) bool {
-		return item > 0
-	})
-
-	if len(delays) > 0 {
-		delay = lo.Max(delays)
 	}
 
 	var publisher *rabbitmq.Publisher
@@ -92,10 +84,14 @@ func (r *RabbitMQ) Producer(data []byte, queue string, routes []string, delays .
 			rabbitmq.WithPublisherOptionsExchangeKind("x-delayed-message"),
 			rabbitmq.WithPublisherOptionsExchangeDurable,
 		}, options...)
+	} else if ttl > 0 {
+		options = append([]func(publisherOptions *rabbitmq.PublisherOptions){
+			rabbitmq.WithPublisherOptionsExchangeDurable,
+		}, options...)
 	}
 
 	options = append([]func(publisherOptions *rabbitmq.PublisherOptions){
-		rabbitmq.WithPublisherOptionsExchangeName(queue),
+		rabbitmq.WithPublisherOptionsExchangeName(exchange),
 		rabbitmq.WithPublisherOptionsExchangeDeclare,
 	}, options...)
 
@@ -104,28 +100,29 @@ func (r *RabbitMQ) Producer(data []byte, queue string, routes []string, delays .
 	}
 
 	opts := r.PublishOptions(queue)
-	opts = append(opts, rabbitmq.WithPublishOptionsExchange(queue))
+	opts = append(opts, rabbitmq.WithPublishOptionsExchange(exchange))
 
 	if delay > 0 {
 		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(rabbitmq.Table{"x-delay": delay * 1000}))
+	} else if ttl > 0 {
+		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(rabbitmq.Table{
+			"x-message-ttl":          ttl * 1000,
+			"x-dead-letter-exchange": exchange,
+		}))
 	}
 
 	return publisher.Publish(data, routes, opts...)
 }
 
-func (r *RabbitMQ) Consumer(handler func(data []byte), queue string, delays ...bool) (err error) {
+func (r *RabbitMQ) Consumer(handler func(data []byte) error, exchange, queue, route string, delay bool, ttl int64) (err error) {
 
 	if err = r.CheckQueue(queue); err != nil {
 		return err
 	}
 
-	delays = lo.Filter(delays, func(item bool, index int) bool {
-		return item
-	})
-
 	options := r.ConsumerOptions(queue)
 
-	if len(delays) > 0 {
+	if delay {
 
 		options = append([]func(*rabbitmq.ConsumerOptions){
 			rabbitmq.WithConsumerOptionsExchangeArgs(rabbitmq.Table{
@@ -134,11 +131,20 @@ func (r *RabbitMQ) Consumer(handler func(data []byte), queue string, delays ...b
 			rabbitmq.WithConsumerOptionsExchangeKind("x-delayed-message"),
 			rabbitmq.WithConsumerOptionsExchangeDurable,
 		}, options...)
+	} else if ttl > 0 {
+
+		options = append([]func(*rabbitmq.ConsumerOptions){
+			rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
+				"x-message-ttl":          ttl * 1000,
+				"x-dead-letter-exchange": exchange,
+			}),
+			rabbitmq.WithConsumerOptionsExchangeDurable,
+		}, options...)
 	}
 
 	options = append([]func(*rabbitmq.ConsumerOptions){
-		rabbitmq.WithConsumerOptionsExchangeName(queue),
-		rabbitmq.WithConsumerOptionsRoutingKey(queue),
+		rabbitmq.WithConsumerOptionsExchangeName(exchange),
+		rabbitmq.WithConsumerOptionsRoutingKey(route),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
 		rabbitmq.WithConsumerOptionsConcurrency(10),
 	}, options...)
@@ -150,7 +156,26 @@ func (r *RabbitMQ) Consumer(handler func(data []byte), queue string, delays ...b
 	}
 
 	err = consumer.Run(func(d rabbitmq.Delivery) (action rabbitmq.Action) {
-		handler(d.Body)
+
+		if err = handler(d.Body); err != nil {
+
+			q := facades.Cfg.GetString("queue.queues.basic.error", "basic_error")
+
+			data := constnats.BasicError{
+				Exchange: exchange,
+				Queue:    queue,
+				Route:    route,
+				Message:  string(d.Body),
+				Error:    err.Error(),
+			}
+
+			body, _ := json.Marshal(data)
+
+			if err = r.Producer(body, q, q, []string{q}, 0, 0); err != nil {
+				return rabbitmq.NackDiscard
+			}
+		}
+
 		return rabbitmq.Ack
 	})
 

@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"fmt"
 	"github.com/go-playground/locales"
 	"github.com/go-playground/locales/ar"
 	"github.com/go-playground/locales/en"
@@ -52,7 +53,7 @@ func NewApplication() {
 
 	valid := go_playground.NewValidator()
 
-	valid.SetValidateTag("valid")
+	valid.SetValidateTag(facades.Cfg.GetString("validation.valid", "valid"))
 
 	tran, language := translator()
 
@@ -63,7 +64,7 @@ func NewApplication() {
 	vd := valid.Engine().(*validator.Validate)
 
 	vd.RegisterTagNameFunc(func(field reflect.StructField) string {
-		return field.Tag.Get("label")
+		return field.Tag.Get(facades.Cfg.GetString("validation.label", "label"))
 	})
 
 	if err := register(vd, trans, language); err != nil {
@@ -72,6 +73,8 @@ func NewApplication() {
 
 	//注册翻译器
 	translations(vd, trans, language)
+
+	translation(vd, trans, language)
 
 	facades.Validator = valid
 }
@@ -158,5 +161,20 @@ func translations(vd *validator.Validate, trans ut.Translator, language string) 
 		_ = zhTWTranslation.RegisterDefaultTranslations(vd, trans)
 	default:
 		_ = enTranslation.RegisterDefaultTranslations(vd, trans)
+	}
+}
+
+func translation(vd *validator.Validate, trans ut.Translator, language string) {
+
+	myTranslations := facades.Cfg.GetMaps(fmt.Sprintf("validation.translation.%s", language))
+
+	for key, val := range myTranslations {
+
+		_ = vd.RegisterTranslation(key, trans, func(ut ut.Translator) error {
+			return ut.Add(key, fmt.Sprintf("%v", val), true)
+		}, func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T(key, fe.Field())
+			return t
+		})
 	}
 }
