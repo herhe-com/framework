@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/console"
-	"github.com/herhe-com/framework/contracts/util"
+	"github.com/herhe-com/framework/contracts/global"
 	"github.com/herhe-com/framework/facades"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
@@ -58,7 +58,7 @@ func (that *ConsumerProvider) username() (username string, err error) {
 		Label: "用户名",
 		Validate: func(str string) error {
 
-			if ok, _ := regexp.MatchString(util.PatternOfUsername, str); !ok {
+			if ok, _ := regexp.MatchString(global.PatternOfUsername, str); !ok {
 				return errors.New("格式错误")
 			}
 
@@ -79,7 +79,7 @@ func (that *ConsumerProvider) password() (password string, err error) {
 		Label: "密码",
 		Validate: func(str string) error {
 
-			if ok, _ := regexp.MatchString(util.PatternOfPassword, str); !ok {
+			if ok, _ := regexp.MatchString(global.PatternOfPassword, str); !ok {
 				return errors.New("格式错误")
 			}
 

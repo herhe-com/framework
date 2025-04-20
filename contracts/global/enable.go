@@ -1,4 +1,4 @@
-package util
+package global
 
 const (
 	Yes uint8 = 1

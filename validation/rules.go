@@ -4,7 +4,7 @@ import (
 	"fmt"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
-	"github.com/herhe-com/framework/contracts/util"
+	"github.com/herhe-com/framework/contracts/global"
 	"math"
 	"regexp"
 	"strconv"
@@ -62,7 +62,7 @@ func rules() []rule {
 	return []rule{
 		{
 			tag:         "captcha",
-			pattern:     util.PatternOfCaptcha,
+			pattern:     global.PatternOfCaptcha,
 			translation: "{0} must be a valid CAPTCHA",
 			translations: map[string]string{
 				"zh": "{0}必须是一个有效的验证码",
@@ -70,8 +70,16 @@ func rules() []rule {
 			},
 		},
 		{
+			tag:         "pinyin",
+			pattern:     global.PatternOfPinyin,
+			translation: "{0} must be a valid pinyin",
+			translations: map[string]string{
+				"zh": "{0}必须是一个有效的拼音",
+			},
+		},
+		{
 			tag:         "mobile",
-			pattern:     util.PatternOfMobile,
+			pattern:     global.PatternOfMobile,
 			translation: "{0} must be a valid mobile phone number",
 			translations: map[string]string{
 				"zh": "{0}必须是一个有效的手机号",
@@ -79,7 +87,7 @@ func rules() []rule {
 		},
 		{
 			tag:         "dirs",
-			pattern:     util.PatternOfDirs,
+			pattern:     global.PatternOfDirs,
 			translation: "{0} must be a valid dir address",
 			translations: map[string]string{
 				"zh": "{0}必须是一个有效的文件夹",
@@ -87,7 +95,7 @@ func rules() []rule {
 		},
 		{
 			tag:         "username",
-			pattern:     util.PatternOfUsername,
+			pattern:     global.PatternOfUsername,
 			translation: "{0} must be a valid username",
 			translations: map[string]string{
 				"zh": "{0}必须是一个有效的用户名",
@@ -95,7 +103,7 @@ func rules() []rule {
 		},
 		{
 			tag:         "password",
-			pattern:     util.PatternOfPassword,
+			pattern:     global.PatternOfPassword,
 			translation: "{0} must be a valid password",
 			translations: map[string]string{
 				"zh": "{0}必须是一个有效的密码",
@@ -103,7 +111,7 @@ func rules() []rule {
 		},
 		{
 			tag:         "snowflake",
-			pattern:     util.PatternOfSnowflake,
+			pattern:     global.PatternOfSnowflake,
 			translation: "{0} must be a valid snowflake",
 			translations: map[string]string{
 				"zh": "{0}必须是一个有效的雪花 Organization",
