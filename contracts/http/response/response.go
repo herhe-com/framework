@@ -12,3 +12,10 @@ type Paginate[T any] struct {
 	Size  int   `json:"size"`
 	Data  []T   `json:"data"`
 }
+
+type Event[T any] struct {
+	ID        any    `json:"id,omitempty"`
+	Event     string `json:"event"`
+	Data      T      `json:"data"`
+	Timestamp string `json:"timestamp,omitempty"`
+}
