@@ -12,7 +12,17 @@ func Jwt() app.HandlerFunc {
 
 	return func(c context.Context, ctx *app.RequestContext) {
 
-		if token := ctx.GetHeader(authConstant.JwtOfAuthorization); len(token) > 0 {
+		var token = ""
+
+		authToken := ctx.GetHeader(authConstant.JwtOfAuthorization)
+
+		if len(authToken) > 0 {
+			token = string(authToken)
+		} else {
+			token = ctx.Query(authConstant.JwtOfAuthorization)
+		}
+
+		if len(token) > 0 {
 
 			var claims authConstant.Claims
 
