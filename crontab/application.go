@@ -47,6 +47,12 @@ func (app *Application) Init() {
 }
 
 func (app *Application) Start() {
+	app.client.Start()
+}
+
+func (app *Application) Restart() {
+
+	app.client.Stop()
 
 	app.client.Start()
 }

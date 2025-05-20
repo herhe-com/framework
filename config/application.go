@@ -14,20 +14,26 @@ type Application struct {
 
 func NewApplication() (err error) {
 
-	var file []byte
-
-	if file, err = os.ReadFile(facades.Root + "/conf/env.yaml"); err != nil {
-		return err
-	}
-
 	app := &Application{
 		vip: viper.New(),
 	}
 
-	app.vip.SetConfigType("yaml")
+	var file []byte
 
-	if err = app.vip.ReadConfig(bytes.NewReader(file)); err != nil {
-		return err
+	if _, err = os.Stat(facades.Root + "/conf/env.yaml"); err == nil {
+
+		if file, err = os.ReadFile(facades.Root + "/conf/env.yaml"); err != nil {
+			return err
+		}
+	}
+
+	if len(file) > 0 {
+
+		app.vip.SetConfigType("yaml")
+
+		if err = app.vip.ReadConfig(bytes.NewReader(file)); err != nil {
+			return err
+		}
 	}
 
 	facades.Cfg = app
