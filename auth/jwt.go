@@ -192,13 +192,23 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 
 		if facades.Redis != nil {
 
-			var affected int64
+			script := `
+				local token = redis.call("HSET", KEYS[1], "token", ARGV[1])
+				local created_at = redis.call("HSET", KEYS[1], "created_at", ARGV[2])
+				if token and created_at then
+					redis.call("EXPIREAT", KEYS[1], ARGV[3])
+					return 1
+				end
+				return 0
+				`
 
-			if affected, err = facades.Redis.HSet(ctx, bk, "token", token, "created_at", now.ToDateTimeString()).Result(); err != nil || affected <= 0 {
+			expire := carbon.CreateFromStdTime(claims.ExpiresAt.Time).AddSeconds(int(lifetime))
+
+			if result, err := facades.Redis.Eval(ctx, script, []string{bk}, token, now.ToDateTimeString(), expire.Timestamp()).Result(); err != nil {
 				return "", err
+			} else if fmt.Sprintf("%v", result) != "1" {
+				return "", errors.New("failed to set the refresh token")
 			}
-
-			facades.Redis.ExpireAt(ctx, bk, carbon.CreateFromStdTime(claims.ExpiresAt.Time).AddSeconds(int(lifetime)).StdTime())
 		}
 
 		return token, nil

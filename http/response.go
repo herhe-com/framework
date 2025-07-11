@@ -17,6 +17,16 @@ func String(ctx *app.RequestContext, format string, values ...any) {
 	ctx.String(http.StatusOK, format, values...)
 }
 
+func File(ctx *app.RequestContext, filepath string, filename ...any) {
+
+	if len(filename) > 0 {
+		ctx.FileAttachment(filepath, filename[0].(string))
+		return
+	}
+
+	ctx.File(filepath)
+}
+
 func Unauthorized(ctx *app.RequestContext) {
 	ctx.JSON(http.StatusOK, response.Response[any]{
 		Code:    40100,

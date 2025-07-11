@@ -1,6 +1,7 @@
 package foundation
 
 import (
+	"github.com/dromara/carbon/v2"
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/config"
 	"github.com/herhe-com/framework/contracts/service"
@@ -34,6 +35,7 @@ func (a *Application) SetLocation() {
 
 	if loc, err := time.LoadLocation(facades.Cfg.GetString("server.location")); err == nil {
 		time.Local = loc
+		carbon.SetLocation(loc)
 	}
 }
 

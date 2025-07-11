@@ -67,7 +67,7 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 		return
 	}
 
-	tx := facades.Gorm.First(&model, id)
+	tx := facades.Database.Default().First(&model, id)
 
 	if tx.Error == nil {
 		hash, _ := json.Marshal(model)

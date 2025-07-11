@@ -1,10 +1,10 @@
 package facades
 
 import (
+	"github.com/herhe-com/framework/contracts/database"
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 )
 
-var Gorm *gorm.DB
+var Database database.Database
 
 var Redis *redis.Client
