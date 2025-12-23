@@ -2,49 +2,50 @@ package validation
 
 import (
 	"fmt"
-	ut "github.com/go-playground/universal-translator"
-	"github.com/go-playground/validator/v10"
-	"github.com/herhe-com/framework/contracts/global"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
-)
 
-type rule struct {
-	tag          string
-	pattern      string
-	valid        func(fl validator.FieldLevel) bool
-	translation  string
-	translations map[string]string
-}
+	ut "github.com/go-playground/universal-translator"
+	"github.com/go-playground/validator/v10"
+	"github.com/herhe-com/framework/contracts/global"
+	"github.com/herhe-com/framework/contracts/validation"
+	"github.com/herhe-com/framework/facades"
+)
 
 func register(vd *validator.Validate, trans ut.Translator, language string) (err error) {
 
-	for _, item := range rules() {
+	rule := rules()
 
-		fn := item.valid
+	if items, ok := facades.Cfg.Get("validation.rules", nil).([]validation.Rule); ok && len(items) > 0 {
+		rule = append(rule, items...)
+	}
 
-		if item.pattern != "" {
+	for _, item := range rule {
+
+		fn := item.Valid
+
+		if item.Pattern != "" {
 			fn = func(fl validator.FieldLevel) bool {
-				ok, _ := regexp.MatchString(item.pattern, fl.Field().String())
+				ok, _ := regexp.MatchString(item.Pattern, fl.Field().String())
 				return ok
 			}
 		}
 
-		if err = vd.RegisterValidation(item.tag, fn); err != nil {
+		if err = vd.RegisterValidation(item.Tag, fn); err != nil {
 			return err
 		}
 
-		text := item.translation
+		text := item.Translation
 
-		if txt, ok := item.translations[language]; ok {
+		if txt, ok := item.Translations[language]; ok {
 			text = txt
 		}
 
-		if err = vd.RegisterTranslation(item.tag, trans,
+		if err = vd.RegisterTranslation(item.Tag, trans,
 			func(ut ut.Translator) error {
-				return ut.Add(item.tag, text, true)
+				return ut.Add(item.Tag, text, true)
 			},
 			func(ut ut.Translator, fe validator.FieldError) string {
 				t, _ := ut.T(fe.Tag(), fe.Field(), fe.Param())
@@ -57,69 +58,69 @@ func register(vd *validator.Validate, trans ut.Translator, language string) (err
 	return nil
 }
 
-func rules() []rule {
+func rules() []validation.Rule {
 
-	return []rule{
+	return []validation.Rule{
 		{
-			tag:         "captcha",
-			pattern:     global.PatternOfCaptcha,
-			translation: "{0} must be a valid CAPTCHA",
-			translations: map[string]string{
+			Tag:         "captcha",
+			Pattern:     global.PatternOfCaptcha,
+			Translation: "{0} must be a valid CAPTCHA",
+			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的验证码",
 				"ja": "{0}は正しい認証コードでなければならない",
 			},
 		},
 		{
-			tag:         "pinyin",
-			pattern:     global.PatternOfPinyin,
-			translation: "{0} must be a valid pinyin",
-			translations: map[string]string{
+			Tag:         "pinyin",
+			Pattern:     global.PatternOfPinyin,
+			Translation: "{0} must be a valid pinyin",
+			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的拼音",
 			},
 		},
 		{
-			tag:         "mobile",
-			pattern:     global.PatternOfMobile,
-			translation: "{0} must be a valid mobile phone number",
-			translations: map[string]string{
+			Tag:         "mobile",
+			Pattern:     global.PatternOfMobile,
+			Translation: "{0} must be a valid mobile phone number",
+			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的手机号",
 			},
 		},
 		{
-			tag:         "dirs",
-			pattern:     global.PatternOfDirs,
-			translation: "{0} must be a valid dir address",
-			translations: map[string]string{
+			Tag:         "dirs",
+			Pattern:     global.PatternOfDirs,
+			Translation: "{0} must be a valid dir address",
+			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的文件夹",
 			},
 		},
 		{
-			tag:         "username",
-			pattern:     global.PatternOfUsername,
-			translation: "{0} must be a valid username",
-			translations: map[string]string{
+			Tag:         "username",
+			Pattern:     global.PatternOfUsername,
+			Translation: "{0} must be a valid username",
+			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的用户名",
 			},
 		},
 		{
-			tag:         "password",
-			pattern:     global.PatternOfPassword,
-			translation: "{0} must be a valid password",
-			translations: map[string]string{
+			Tag:         "password",
+			Pattern:     global.PatternOfPassword,
+			Translation: "{0} must be a valid password",
+			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的密码",
 			},
 		},
 		{
-			tag:         "snowflake",
-			pattern:     global.PatternOfSnowflake,
-			translation: "{0} must be a valid snowflake",
-			translations: map[string]string{
+			Tag:         "snowflake",
+			Pattern:     global.PatternOfSnowflake,
+			Translation: "{0} must be a valid snowflake",
+			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的雪花 Organization",
 			},
 		},
 		{
-			tag: "idCard",
-			valid: func(fl validator.FieldLevel) bool {
+			Tag: "idCard",
+			Valid: func(fl validator.FieldLevel) bool {
 
 				id := fl.Field().String()
 				var a1Map = map[int]int{
@@ -166,8 +167,8 @@ func rules() []rule {
 				}
 				return a1Str == signChar
 			},
-			translation: "{0} must be a valid Organization Card",
-			translations: map[string]string{
+			Translation: "{0} must be a valid Organization Card",
+			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的身份证号",
 			},
 		},

@@ -2,6 +2,8 @@ package validation
 
 import (
 	"fmt"
+	"reflect"
+
 	"github.com/go-playground/locales"
 	"github.com/go-playground/locales/ar"
 	"github.com/go-playground/locales/en"
@@ -42,7 +44,6 @@ import (
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/facades"
 	"github.com/hertz-contrib/binding/go_playground"
-	"reflect"
 )
 
 var (
@@ -53,7 +54,7 @@ func NewApplication() {
 
 	valid := go_playground.NewValidator()
 
-	valid.SetValidateTag(facades.Cfg.GetString("validation.valid", "valid"))
+	valid.SetValidateTag("validate")
 
 	tran, language := translator()
 
@@ -81,7 +82,7 @@ func NewApplication() {
 
 func translator() (translator locales.Translator, language string) {
 
-	language = facades.Cfg.GetString("server.language", "en")
+	language = facades.Cfg.GetString("app.language")
 
 	switch language {
 	case "ar":
@@ -112,13 +113,13 @@ func translator() (translator locales.Translator, language string) {
 		translator = tr.New()
 	case "vi":
 		translator = vi.New()
-	case "zh":
-		translator = zh.New()
+	case "en":
+		translator = en.New()
 	case "zh_tw":
 		translator = zh_Hant.New()
 	default:
-		translator = en.New()
-		language = "en"
+		language = "zh"
+		translator = zh.New()
 	}
 
 	return translator, language
