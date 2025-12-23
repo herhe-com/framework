@@ -1,11 +1,12 @@
 package crontab
 
 import (
+	"time"
+
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/crontab"
 	"github.com/herhe-com/framework/facades"
 	"github.com/robfig/cron/v3"
-	"time"
 )
 
 type Application struct {
@@ -14,7 +15,7 @@ type Application struct {
 
 func (app *Application) configured() []crontab.Crontab {
 
-	if cs, ok := facades.Cfg.Get("server.crontab").([]crontab.Crontab); ok {
+	if cs, ok := facades.Cfg.Get("crontab.functions").([]crontab.Crontab); ok {
 		return cs
 	}
 

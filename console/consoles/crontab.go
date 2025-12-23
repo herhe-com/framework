@@ -2,13 +2,14 @@ package consoles
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/herhe-com/framework/crontab"
 	"github.com/spf13/cobra"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 type CrontabProvider struct {
