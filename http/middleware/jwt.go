@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/herhe-com/framework/auth"
 	authConstant "github.com/herhe-com/framework/contracts/auth"
@@ -12,15 +13,7 @@ func Jwt() app.HandlerFunc {
 
 	return func(c context.Context, ctx *app.RequestContext) {
 
-		var token = ""
-
-		authToken := ctx.GetHeader(authConstant.JwtOfAuthorization)
-
-		if len(authToken) > 0 {
-			token = string(authToken)
-		} else {
-			token = ctx.Query(authConstant.JwtOfAuthorization)
-		}
+		token := ctx.GetHeader(authConstant.JwtOfAuthorization)
 
 		if len(token) > 0 {
 
@@ -31,6 +24,10 @@ func Jwt() app.HandlerFunc {
 			if err == nil {
 				ctx.Set(authConstant.ContextOfID, claims.Subject)
 				ctx.Set(authConstant.ContextOfClaims, claims)
+			}
+
+			if platform := auth.DefaultPlatform(); platform > 0 {
+				ctx.Set(authConstant.ContextOfPlatform, platform)
 			}
 
 			if refresh && claims.Refresh {
@@ -47,19 +44,22 @@ func Jwt() app.HandlerFunc {
 				ctx.Header(authConstant.Authorization, refreshToken)
 
 				//  获取令牌刷新后的操作
-				if ref, ok := facades.Cfg.Get("auth.refresh").(func(co context.Context, rc *app.RequestContext)); ok {
-					ref(c, ctx)
+				if callback := facades.Cfg.Get("auth.callback.refresh"); callback != nil {
+
+					if function, ok := callback.(func(c context.Context, ctx *app.RequestContext)); ok {
+						function(c, ctx)
+					}
 				}
 			}
 
-			callback := facades.Cfg.Get("auth.callback.jwt")
+			if callback := facades.Cfg.Get("auth.callback.jwt"); callback != nil {
 
-			if callback != nil {
-
-				if callback.(func(c context.Context, ctx *app.RequestContext))(c, ctx); err != nil {
-					return
+				if function, ok := callback.(func(c context.Context, ctx *app.RequestContext)); ok {
+					function(c, ctx)
 				}
 			}
 		}
+
+		ctx.Next(c)
 	}
 }

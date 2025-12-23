@@ -1,9 +1,10 @@
 package middleware
 
 import (
+	"time"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/hertz-contrib/cors"
-	"time"
 )
 
 func Cors() app.HandlerFunc {

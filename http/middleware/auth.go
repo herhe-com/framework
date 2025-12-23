@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/herhe-com/framework/auth"
 	"github.com/herhe-com/framework/http"
