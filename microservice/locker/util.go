@@ -1,18 +1,20 @@
 package locker
 
 import (
-	"fmt"
-	"github.com/herhe-com/framework/facades"
-	"strings"
+	"github.com/herhe-com/framework/support/util"
 )
 
 func Keys(key string, keys ...any) string {
 
-	items := []string{key}
+	items := make([]any, 0)
+
+	items = append(items, "locker")
+	items = append(items, key)
 
 	for _, item := range keys {
-		items = append(items, fmt.Sprintf("%v", item))
+		items = append(items, item)
 	}
 
-	return facades.Cfg.GetString("server.name") + ":locker:" + strings.Join(items, ":")
+	return util.Keys(items...)
+
 }
