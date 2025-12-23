@@ -2,12 +2,13 @@ package consoles
 
 import (
 	"fmt"
+	"net"
+
 	"github.com/cloudwego/kitex/server"
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/herhe-com/framework/facades"
 	"github.com/spf13/cobra"
-	"net"
 )
 
 type ServiceProvider struct {
@@ -20,11 +21,14 @@ func (p *ServiceProvider) Register() console.Console {
 		Name: "启动微服务",
 		Run: func(cmd *cobra.Command, args []string) {
 
+			addr := facades.Cfg.GetString("service.address", "0.0.0.0")
+			port := facades.Cfg.GetString("service.port", "8600")
+
 			options := make([]server.Option, 0)
 
-			addr, _ := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%s", facades.Cfg.GetString("server.address", "0.0.0.0"), facades.Cfg.GetString("server.port", "8600")))
+			address, _ := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%s", addr, port))
 
-			options = append(options, server.WithServiceAddr(addr))
+			options = append(options, server.WithServiceAddr(address))
 
 			opts, _ := facades.Cfg.Get("service.options").([]server.Option)
 

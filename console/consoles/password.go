@@ -2,12 +2,13 @@ package consoles
 
 import (
 	"errors"
+	"strings"
+
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/auth"
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
-	"strings"
 )
 
 type PasswordProvider struct {

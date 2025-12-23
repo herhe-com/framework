@@ -2,13 +2,14 @@ package consoles
 
 import (
 	"database/sql"
+	"os"
+
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/herhe-com/framework/database/database"
 	"github.com/herhe-com/framework/facades"
 	"github.com/pressly/goose/v3"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 type MigrationProvider struct {
@@ -22,7 +23,7 @@ func (that *MigrationProvider) Register() console.Console {
 		Name: "数据迁移",
 	}
 
-	if facades.Database.Default() == nil {
+	if facades.DB.Default() == nil {
 		color.Errorln("\n\n请初始化数据库\n\n")
 		return migrate
 	}
@@ -31,7 +32,7 @@ func (that *MigrationProvider) Register() console.Console {
 
 	var err error
 
-	if that.db, err = facades.Database.Default().DB(); err != nil {
+	if that.db, err = facades.DB.Default().DB(); err != nil {
 		color.Errorln("\n\n数据库获取失败：%v\n\n", err)
 		return migrate
 	}

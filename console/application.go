@@ -14,8 +14,8 @@ func register() error {
 
 	facades.Console = &cobra.Command{
 		Use:     "application",
-		Short:   "UPER",
-		Version: "1.0.0",
+		Short:   facades.Cfg.GetString("app.name", "UPER"),
+		Version: facades.Cfg.GetString("app.version", "1.0.0"),
 	}
 
 	app := Application{}
@@ -36,7 +36,7 @@ func (app *Application) getBasicConsoles() []console.Provider {
 
 func (app *Application) getConfiguredConsoles() []console.Provider {
 
-	if cons, ok := facades.Cfg.Get("server.consoles").([]console.Provider); ok {
+	if cons, ok := facades.Cfg.Get("kernel.consoles").([]console.Provider); ok {
 		return cons
 	}
 

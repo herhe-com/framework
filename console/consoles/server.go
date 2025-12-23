@@ -1,13 +1,16 @@
 package consoles
 
 import (
+	"net"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/config"
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/herhe-com/framework/facades"
+	"github.com/hertz-contrib/swagger"
 	"github.com/spf13/cobra"
-	"net"
+	files "github.com/swaggo/files"
 )
 
 type ServerProvider struct {
@@ -29,7 +32,7 @@ func (*ServerProvider) Register() console.Console {
 				options = append(options, server.WithCustomValidator(facades.Validator))
 			}
 
-			if facades.Cfg.GetBool("server.debug") {
+			if facades.Cfg.GetBool("app.debug") {
 				options = append(options, server.WithExitWaitTime(1))
 			} else {
 				options = append(options, server.WithDisablePrintRoute(true))
@@ -51,6 +54,10 @@ func (*ServerProvider) Register() console.Console {
 
 			if handle, ok := facades.Cfg.Get("server.handle").(func(s *server.Hertz)); ok {
 				handle(serv)
+			}
+
+			if facades.Cfg.GetBool("app.debug") {
+				serv.GET("/swagger/*any", swagger.WrapHandler(files.Handler, swagger.DefaultModelsExpandDepth(-1)))
 			}
 
 			serv.Spin()
