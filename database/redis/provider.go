@@ -1,6 +1,9 @@
 package redis
 
-import "github.com/herhe-com/framework/contracts/service"
+import (
+	"github.com/herhe-com/framework/contracts/service"
+	"github.com/herhe-com/framework/facades"
+)
 
 type ServiceProvider struct {
 	service.Provider
@@ -8,9 +11,13 @@ type ServiceProvider struct {
 
 func (p *ServiceProvider) Register() (err error) {
 
-	if err = NewApplication(); err != nil {
+	redis, err := NewApplication()
+
+	if err != nil {
 		return err
 	}
+
+	facades.Redis = redis
 
 	return nil
 }

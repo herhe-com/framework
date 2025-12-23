@@ -1,10 +1,11 @@
 package database
 
 import (
-	"gorm.io/gorm/logger"
 	"log"
 	"os"
 	"time"
+
+	"gorm.io/gorm/logger"
 )
 
 func LogOfOutput() logger.Interface {

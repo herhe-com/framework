@@ -2,6 +2,7 @@ package scope
 
 import (
 	"fmt"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/herhe-com/framework/auth"
 	"gorm.io/gorm"
@@ -19,10 +20,7 @@ func Platform(ctx *app.RequestContext, tables ...string) func(db *gorm.DB) *gorm
 
 		organization := auth.Organization(ctx)
 
-		if organization == nil {
-
-			db.Where("`platform`=? and `organization_id` is null", auth.Platform(ctx))
-		} else {
+		if organization.Valid {
 
 			query := "`platform`=? and `organization_id`=?"
 
@@ -30,7 +28,9 @@ func Platform(ctx *app.RequestContext, tables ...string) func(db *gorm.DB) *gorm
 				query = fmt.Sprintf("`%s`.`platform`=? and `%s`.`organization_id`=?", table, table)
 			}
 
-			db.Where(query, auth.Platform(ctx), *organization)
+			db.Where(query, auth.Platform(ctx), organization.String)
+		} else {
+			db.Where("`platform`=? and `organization_id` is null", auth.Platform(ctx))
 		}
 
 		return db

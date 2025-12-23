@@ -17,7 +17,7 @@ func (p *ServiceProvider) Register() (err error) {
 		return err
 	}
 
-	facades.Database = database
+	facades.DB = database
 
 	return nil
 }

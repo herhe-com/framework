@@ -2,9 +2,8 @@ package facades
 
 import (
 	"github.com/herhe-com/framework/contracts/database"
-	"github.com/redis/go-redis/v9"
 )
 
-var Database database.Database
+var DB database.DB
 
-var Redis *redis.Client
+var Redis database.Redis
