@@ -1,13 +1,14 @@
 package foundation
 
 import (
+	"os"
+	"time"
+
 	"github.com/dromara/carbon/v2"
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/config"
 	"github.com/herhe-com/framework/contracts/service"
 	"github.com/herhe-com/framework/facades"
-	"os"
-	"time"
 )
 
 func init() {
@@ -33,7 +34,7 @@ func (a *Application) Boot() {
 
 func (a *Application) SetLocation() {
 
-	if loc, err := time.LoadLocation(facades.Cfg.GetString("server.location")); err == nil {
+	if loc, err := time.LoadLocation(facades.Cfg.GetString("app.location")); err == nil {
 		time.Local = loc
 		carbon.SetLocation(loc)
 	}
@@ -47,7 +48,7 @@ func (a *Application) getBasicServiceProviders() []service.Provider {
 
 func (a *Application) getConfiguredServiceProviders() []service.Provider {
 
-	if providers, ok := facades.Cfg.Get("server.providers").([]service.Provider); ok {
+	if providers, ok := facades.Cfg.Get("kernel.providers").([]service.Provider); ok {
 		return providers
 	}
 
