@@ -11,4 +11,5 @@ type Application interface {
 	GetInt(key string, defaultValue ...int) int
 	GetInt64(key string, defaultValue ...int64) int64
 	GetBool(key string, defaultValue ...bool) bool
+	IsSet(key string) bool
 }

@@ -2,10 +2,13 @@ package config
 
 import (
 	"bytes"
+	"os"
+	"time"
+
+	"github.com/gookit/color"
 	"github.com/herhe-com/framework/facades"
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
-	"os"
 )
 
 type Application struct {
@@ -18,21 +21,64 @@ func NewApplication() (err error) {
 		vip: viper.New(),
 	}
 
-	var file []byte
+	app.vip.SetConfigType("yaml")
 
 	if _, err = os.Stat(facades.Root + "/conf/env.yaml"); err == nil {
+
+		var file []byte
 
 		if file, err = os.ReadFile(facades.Root + "/conf/env.yaml"); err != nil {
 			return err
 		}
-	}
 
-	if len(file) > 0 {
+		if len(file) > 0 {
+			if err = app.vip.ReadConfig(bytes.NewReader(file)); err != nil {
+				return err
+			}
+		}
+	} else {
+		// 从环境变量中获取配置
 
-		app.vip.SetConfigType("yaml")
+		provider := os.Getenv("HH_CFG_PROVIDER")
+		endpoint := os.Getenv("HH_CFG_ENDPOINT")
+		path := os.Getenv("HH_CFG_PATH")
+		watch := os.Getenv("HH_CFG_WATCH")
+		secret := os.Getenv("HH_CFG_SECRET")
 
-		if err = app.vip.ReadConfig(bytes.NewReader(file)); err != nil {
-			return err
+		if watch == "" {
+			watch = "true"
+		}
+
+		if provider != "" && endpoint != "" && path != "" {
+
+			if secret != "" {
+				if err = app.vip.AddSecureRemoteProvider(provider, endpoint, path, secret); err != nil {
+					return err
+				}
+			} else if err = app.vip.AddRemoteProvider(provider, endpoint, path); err != nil {
+				return err
+			}
+
+			if err = app.vip.ReadRemoteConfig(); err != nil {
+				return err
+			}
+
+			if watch == "true" {
+
+				go func() {
+					for {
+						time.Sleep(time.Second * 5) // delay after each request
+
+						// currently, only tested with etcd support
+						err = app.vip.WatchRemoteConfig()
+
+						if err != nil {
+							color.Errorf("unable to read remote config: %v", err)
+							continue
+						}
+					}
+				}()
+			}
 		}
 	}
 
@@ -161,4 +207,8 @@ func (app *Application) GetBool(key string, defaultValue ...bool) bool {
 	}
 
 	return app.vip.GetBool(key)
+}
+
+func (app *Application) IsSet(key string) bool {
+	return app.IsSet(key)
 }
