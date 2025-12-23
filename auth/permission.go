@@ -3,10 +3,11 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/herhe-com/framework/contracts/auth"
 	"github.com/herhe-com/framework/facades"
 	"github.com/samber/lo"
-	"strings"
 )
 
 func toTrees() error {

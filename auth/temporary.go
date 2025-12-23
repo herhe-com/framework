@@ -3,11 +3,12 @@ package auth
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/herhe-com/framework/contracts/auth"
 	"github.com/herhe-com/framework/facades"
 	"github.com/redis/go-redis/v9"
-	"time"
 )
 
 func Temporary(c context.Context, ctx *app.RequestContext) (role *auth.RoleOfTemporary, err error) {
@@ -24,7 +25,7 @@ func Temporary(c context.Context, ctx *app.RequestContext) (role *auth.RoleOfTem
 
 		var res auth.RoleOfTemporary
 
-		err = facades.Redis.Get(c, RoleOfName(ID(ctx))).Scan(&res)
+		err = facades.Redis.Default().Get(c, RoleOfName(ID(ctx))).Scan(&res)
 
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
@@ -59,7 +60,7 @@ func DoTemporary(c context.Context, ctx *app.RequestContext, platform uint16, or
 
 	expired := time.Hour * 2 * time.Duration(lifetime)
 
-	if _, err = facades.Redis.Set(c, RoleOfName(ID(ctx)), &data, expired).Result(); err != nil {
+	if _, err = facades.Redis.Default().Set(c, RoleOfName(ID(ctx)), &data, expired).Result(); err != nil {
 		return err
 	}
 
@@ -68,7 +69,7 @@ func DoTemporary(c context.Context, ctx *app.RequestContext, platform uint16, or
 
 func DoTemporaryOfDelete(c context.Context, ctx *app.RequestContext) (err error) {
 
-	_, err = facades.Redis.Del(c, RoleOfName(ID(ctx))).Result()
+	_, err = facades.Redis.Default().Del(c, RoleOfName(ID(ctx))).Result()
 
 	if err != nil {
 		return err
@@ -83,7 +84,7 @@ func DoTemporaryOfRefresh(c context.Context, ctx *app.RequestContext) (err error
 
 	expired := time.Hour * 2 * time.Duration(lifetime)
 
-	_, err = facades.Redis.Expire(c, RoleOfName(ID(ctx)), expired).Result()
+	_, err = facades.Redis.Default().Expire(c, RoleOfName(ID(ctx)), expired).Result()
 
 	if err != nil {
 		return err
@@ -94,7 +95,7 @@ func DoTemporaryOfRefresh(c context.Context, ctx *app.RequestContext) (err error
 
 func RoleOfName(id string) string {
 
-	name := facades.Cfg.GetString("server.name")
+	name := facades.Cfg.GetString("app.name")
 
 	return name + ":" + "role" + ":" + id
 }

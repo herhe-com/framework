@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/dromara/carbon/v2"
 	"github.com/dromara/dongle"
@@ -12,8 +15,6 @@ import (
 	"github.com/herhe-com/framework/facades"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
-	"strings"
-	"time"
 )
 
 // NewJWToken
@@ -52,9 +53,7 @@ func BlacklistOfJwtName(ctx *app.RequestContext) string {
 
 func BlacklistOfJwtValue(c context.Context, ctx *app.RequestContext) (bool, error) {
 
-	claims := Claims(ctx)
-
-	if claims == nil {
+	if claims := Claims(ctx); claims == nil {
 		return true, errors.New("claims cannot be null")
 	}
 
@@ -173,7 +172,7 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 	var blacklists map[string]string
 
 	if facades.Redis != nil {
-		blacklists, err = facades.Redis.HGetAll(ctx, bk).Result()
+		blacklists, err = facades.Redis.Default().HGetAll(ctx, bk).Result()
 	}
 
 	now := carbon.Now()
@@ -204,7 +203,7 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 
 			expire := carbon.CreateFromStdTime(claims.ExpiresAt.Time).AddSeconds(int(lifetime))
 
-			if result, err := facades.Redis.Eval(ctx, script, []string{bk}, token, now.ToDateTimeString(), expire.Timestamp()).Result(); err != nil {
+			if result, err := facades.Redis.Default().Eval(ctx, script, []string{bk}, token, now.ToDateTimeString(), expire.Timestamp()).Result(); err != nil {
 				return "", err
 			} else if fmt.Sprintf("%v", result) != "1" {
 				return "", errors.New("failed to set the refresh token")
@@ -266,7 +265,7 @@ func Secret(secrets ...string) (secret string, err error) {
 
 func Issuer(issuer string) string {
 
-	prefix := facades.Cfg.GetString("server.name") + ":"
+	prefix := facades.Cfg.GetString("app.name") + ":"
 
 	if strings.HasPrefix(issuer, prefix) {
 		return issuer
@@ -279,7 +278,7 @@ func id(now time.Time, issuer, subject string) string {
 
 	s := fmt.Sprintf("%s:%s:%d:%s", issuer, subject, now.Unix(), lo.RandomString(32, lo.AlphanumericCharset))
 
-	return dongle.Encrypt.FromString(s).ByMd5().ToHexString()
+	return dongle.Hash.FromString(s).ByMd5().ToHexString()
 }
 
 func blacklist(iss, sub string) string {

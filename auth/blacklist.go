@@ -3,21 +3,22 @@ package auth
 import (
 	"context"
 	"fmt"
-	"github.com/herhe-com/framework/facades"
 	"strings"
 	"time"
+
+	"github.com/herhe-com/framework/facades"
 )
 
 func CheckBlacklist(ctx context.Context, args ...any) bool {
 
-	result, err := facades.Redis.Exists(ctx, KeyBlacklist(args...)).Result()
+	result, err := facades.Redis.Default().Exists(ctx, KeyBlacklist(args...)).Result()
 
 	return err == nil && result > 0
 }
 
 func Blacklist(ctx context.Context, value any, expires time.Duration, args ...any) bool {
 
-	_, err := facades.Redis.Set(ctx, KeyBlacklist(args...), value, expires).Result()
+	_, err := facades.Redis.Default().Set(ctx, KeyBlacklist(args...), value, expires).Result()
 
 	if err == nil {
 		return true
@@ -30,7 +31,7 @@ func KeyBlacklist(args ...any) string {
 
 	keys := make([]string, 0)
 
-	keys = append(keys, facades.Cfg.GetString("server.name"))
+	keys = append(keys, facades.Cfg.GetString("app.name"))
 	keys = append(keys, "blacklist")
 
 	for _, item := range args {

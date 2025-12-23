@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"database/sql"
+	"strconv"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	authConstant "github.com/herhe-com/framework/contracts/auth"
-	"strconv"
 )
 
 func Check(ctx *app.RequestContext) bool {
@@ -44,31 +46,41 @@ func SPlatform(ctx *app.RequestContext) string {
 	}
 }
 
-func Organization(ctx *app.RequestContext) (platform *string) {
+func Organization(ctx *app.RequestContext) (id sql.NullString) {
 
 	if value, exits := ctx.Get(authConstant.ContextOfOrganization); exits {
-		platform, _ = value.(*string)
+		if platform, ok := value.(string); ok {
+			id = sql.NullString{
+				String: platform,
+				Valid:  true,
+			}
+		}
 	}
 
-	return platform
+	return id
 }
 
-func Clique(ctx *app.RequestContext) (clique *string) {
+func Clique(ctx *app.RequestContext) (id sql.NullString) {
 
 	if value, exits := ctx.Get(authConstant.ContextOfClique); exits {
-		clique, _ = value.(*string)
+		if clique, ok := value.(string); ok && clique != "" {
+			id = sql.NullString{
+				String: clique,
+				Valid:  true,
+			}
+		}
 	}
 
-	return clique
+	return id
 }
 
 func Claims(ctx *app.RequestContext) (claims *authConstant.Claims) {
 
-	if value, ok := ctx.Get(authConstant.ContextOfClaims); ok {
-		if claim, o := value.(authConstant.Claims); o {
-			return &claim
+	if value, exist := ctx.Get(authConstant.ContextOfClaims); exist {
+		if tmp, ok := value.(authConstant.Claims); ok {
+			claims = &tmp
 		}
 	}
 
-	return nil
+	return claims
 }

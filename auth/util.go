@@ -2,10 +2,13 @@ package auth
 
 import (
 	"fmt"
-	"github.com/herhe-com/framework/contracts/auth"
-	"golang.org/x/crypto/bcrypt"
+	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/herhe-com/framework/contracts/auth"
+	"github.com/herhe-com/framework/facades"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func Name(args ...any) string {
@@ -68,4 +71,25 @@ func CheckPassword(password, crypt string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(crypt), []byte(password))
 
 	return err == nil
+}
+
+func DefaultPlatform() uint16 {
+
+	var platform uint16 = 0
+
+	if platforms := facades.Cfg.Get("auth.platforms"); platforms != nil {
+		if values, ok := platforms.([]uint16); ok {
+			if len(values) > 1 {
+				sort.Slice(values, func(i, j int) bool {
+					return values[i] < values[j] // data[i] < data[j] 升序, > 降序
+				})
+			}
+
+			if len(values) >= 1 {
+				platform = values[0]
+			}
+		}
+	}
+
+	return platform
 }
