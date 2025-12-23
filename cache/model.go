@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/herhe-com/framework/facades"
+	"github.com/herhe-com/framework/support/util"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
-	"reflect"
-	"strings"
 )
 
 type Model struct {
@@ -32,7 +34,7 @@ func (m *Model) clear(tx *gorm.DB) {
 	key := id(tx)
 
 	if lo.IsNotEmpty(key) && facades.Redis != nil {
-		facades.Redis.Del(tx.Statement.Context, Keys(tx.Statement.Schema.Table, key))
+		facades.Redis.Default().Del(tx.Statement.Context, util.Keys(tx.Statement.Schema.Table, key))
 	}
 }
 
@@ -58,7 +60,9 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 		}
 	}
 
-	result, err := facades.Redis.Get(ctx, Keys(table, id)).Result()
+	key := util.Keys(table, id)
+
+	result, err := facades.Redis.Default().Get(ctx, key).Result()
 
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return err
@@ -67,11 +71,11 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 		return
 	}
 
-	tx := facades.Database.Default().First(&model, id)
+	tx := facades.DB.Default().First(&model, id)
 
 	if tx.Error == nil {
 		hash, _ := json.Marshal(model)
-		facades.Redis.Set(ctx, Keys(table, id), string(hash), TTL())
+		facades.Redis.Default().Set(ctx, key, string(hash), TTL())
 	} else {
 		return tx.Error
 	}

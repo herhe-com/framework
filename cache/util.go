@@ -1,25 +1,15 @@
 package cache
 
 import (
-	"fmt"
-	"github.com/herhe-com/framework/facades"
-	"strings"
 	"time"
+
+	"github.com/herhe-com/framework/facades"
+	"github.com/herhe-com/framework/support/util"
 )
 
 func Keys(args ...any) string {
 
-	name := facades.Cfg.GetString("server.name")
-
-	names := make([]string, 0)
-
-	names = append(names, name)
-
-	for _, item := range args {
-		names = append(names, fmt.Sprintf("%v", item))
-	}
-
-	return strings.Join(names, ":")
+	return util.Keys(args...)
 }
 
 func TTL() time.Duration {
