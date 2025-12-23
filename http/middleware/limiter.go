@@ -2,11 +2,12 @@ package middleware
 
 import (
 	"context"
-	"fmt"
+	"time"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/herhe-com/framework/facades"
 	"github.com/herhe-com/framework/http"
-	"time"
+	"github.com/herhe-com/framework/support/util"
 )
 
 func Limiter(option *LimiterOption) app.HandlerFunc {
@@ -16,8 +17,9 @@ func Limiter(option *LimiterOption) app.HandlerFunc {
 		path := string(ctx.URI().Path())
 
 		var limit int64 = 3
+
 		expiration := time.Minute
-		generator := fmt.Sprintf("%s:limit:%s:%s", facades.Cfg.GetString("server.name"), path, ctx.ClientIP())
+		generator := util.Keys("limit", path, ctx.ClientIP())
 
 		if option != nil {
 
@@ -36,16 +38,25 @@ func Limiter(option *LimiterOption) app.HandlerFunc {
 
 		if facades.Redis != nil {
 
-			total, err := facades.Redis.Incr(c, generator).Result()
+			script := `
+				local current = redis.call("INCR", KEYS[1])
+				if current == 1 then
+					redis.call("EXPIRE", KEYS[1], ARGV[2])
+				end
+				if current > tonumber(ARGV[1]) then
+					return -1
+				end
+				return current
+			`
 
-			if err != nil || total > limit {
+			if res, err := facades.Redis.Default().Eval(c, script, []string{generator}, limit, expiration.Seconds()).Int(); err != nil {
+				ctx.Abort()
+				http.Fail(ctx, "Redis error!")
+				return
+			} else if res == -1 {
 				ctx.Abort()
 				http.Fail(ctx, "The operation is too frequent!")
 				return
-			}
-
-			if total == 1 {
-				facades.Redis.Expire(c, generator, expiration)
 			}
 		}
 	}

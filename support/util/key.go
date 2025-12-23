@@ -2,13 +2,14 @@ package util
 
 import (
 	"fmt"
-	"github.com/herhe-com/framework/facades"
 	"strings"
+
+	"github.com/herhe-com/framework/facades"
 )
 
 func Keys(args ...any) string {
 
-	name := facades.Cfg.GetString("server.name")
+	name := facades.Cfg.GetString("app.name")
 
 	names := make([]string, 0)
 
