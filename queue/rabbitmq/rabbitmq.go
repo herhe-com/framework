@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	constnats "github.com/herhe-com/framework/contracts/queue"
-	"github.com/herhe-com/framework/facades"
-	"github.com/spf13/viper"
-	"github.com/wagslane/go-rabbitmq"
+	"net/url"
 	"strings"
 	"time"
+
+	constnats "github.com/herhe-com/framework/contracts/queue"
+	"github.com/spf13/viper"
+	"github.com/wagslane/go-rabbitmq"
 )
 
 type RabbitMQ struct {
@@ -57,7 +58,7 @@ func NewRabbitMQ(configs map[string]any) (queue *RabbitMQ, err error) {
 }
 
 func (r *RabbitMQ) url() string {
-	return fmt.Sprintf("amqp://%s:%s@%s:%d/%s", r.username, r.password, r.host, r.port, r.vhost)
+	return fmt.Sprintf("amqp://%s:%s@%s:%d/%s", r.username, url.QueryEscape(r.password), r.host, r.port, r.vhost)
 }
 
 func (r *RabbitMQ) Conn() (*rabbitmq.Conn, error) {
@@ -69,7 +70,7 @@ func (r *RabbitMQ) Conn() (*rabbitmq.Conn, error) {
 	return rabbitmq.NewConn(r.url(), options...)
 }
 
-func (r *RabbitMQ) Producer(data []byte, exchange, queue string, routes []string, delay, ttl int64) (err error) {
+func (r *RabbitMQ) Producer(data []byte, exchange, queue string, routes []string, delay, ttl int64, headers ...rabbitmq.Table) (err error) {
 
 	if err = r.CheckQueue(queue); err != nil {
 		return err
@@ -102,19 +103,31 @@ func (r *RabbitMQ) Producer(data []byte, exchange, queue string, routes []string
 	opts := r.PublishOptions(queue)
 	opts = append(opts, rabbitmq.WithPublishOptionsExchange(exchange))
 
+	header := rabbitmq.Table{}
+
 	if delay > 0 {
-		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(rabbitmq.Table{"x-delay": delay * 1000}))
+		header["x-delay"] = delay * 1000
 	} else if ttl > 0 {
-		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(rabbitmq.Table{
-			"x-message-ttl":          ttl * 1000,
-			"x-dead-letter-exchange": exchange,
-		}))
+		header["x-message-ttl"] = ttl * 1000
+		header["x-dead-letter-exchange"] = exchange
+	}
+
+	if len(headers) > 0 {
+		for _, value := range headers {
+			for k, v := range value {
+				header[k] = v
+			}
+		}
+	}
+
+	if len(header) > 0 {
+		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(header))
 	}
 
 	return publisher.Publish(data, routes, opts...)
 }
 
-func (r *RabbitMQ) Consumer(handler func(data []byte) error, exchange, queue, route string, delay bool, ttl int64) (err error) {
+func (r *RabbitMQ) Consumer(handler func(data []byte) error, exchange, queue, route string, delay bool, ttl int64, retry int) (err error) {
 
 	if err = r.CheckQueue(queue); err != nil {
 		return err
@@ -157,14 +170,41 @@ func (r *RabbitMQ) Consumer(handler func(data []byte) error, exchange, queue, ro
 
 	err = consumer.Run(func(d rabbitmq.Delivery) (action rabbitmq.Action) {
 
+		retried := 0
+
+		if retry > 0 {
+			retried, _ = d.Headers["x-retry"].(int)
+		}
+
+		var delayTTTL int64 = 0
+
+		if delay {
+			delayTTTL, _ = d.Headers["x-delay"].(int64)
+		}
+
 		if err = handler(d.Body); err != nil {
 
-			q := facades.Cfg.GetString("queue.queues.basic.error", "basic_error")
+			if retry > 0 && retried < retry {
+				d.Headers["x-retry"] = retried + 1
+
+				if err = r.Producer(d.Body, exchange, queue, []string{route}, delayTTTL, ttl); err != nil {
+					return rabbitmq.NackDiscard
+				}
+
+				return rabbitmq.Ack
+			}
+
+			q := r.cfg.GetString("rabbitmq.error")
+
+			if q == "" {
+				q = "basic_error"
+			}
 
 			data := constnats.BasicError{
 				Exchange: exchange,
 				Queue:    queue,
 				Route:    route,
+				Retry:    retried,
 				Message:  string(d.Body),
 				Error:    err.Error(),
 			}

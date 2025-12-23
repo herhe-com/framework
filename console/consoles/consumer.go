@@ -3,17 +3,18 @@ package consoles
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
+	"regexp"
+	"strings"
+	"syscall"
+
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/herhe-com/framework/contracts/global"
 	"github.com/herhe-com/framework/facades"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
-	"os"
-	"os/signal"
-	"regexp"
-	"strings"
-	"syscall"
 )
 
 type ConsumerProvider struct {

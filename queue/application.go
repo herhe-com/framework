@@ -2,6 +2,7 @@ package queue
 
 import (
 	"fmt"
+
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/queue"
 	"github.com/herhe-com/framework/facades"
@@ -25,9 +26,9 @@ func NewQueue() *Queue {
 		return nil
 	}
 
-	driver, err := NewDriver(defaultDriver)
+	driver, err := NewDriver(defaultDriver, "default")
 	if err != nil {
-		color.Errorln("[queue] %s\n", err)
+		color.Errorf("[queue] %s", err)
 		return nil
 	}
 
@@ -40,38 +41,28 @@ func NewQueue() *Queue {
 	}
 }
 
-func NewDriver(driver string, name ...string) (queue.Driver, error) {
-
-	n := "default"
-
-	if len(name) == 1 && name[0] != "" {
-		n = name[0]
-	}
+func NewDriver(driver string, name string) (queue.Driver, error) {
 
 	switch driver {
 	case DriverRabbitmq:
-		cfg, _ := facades.Cfg.Get(fmt.Sprintf("queue.rabbitmq.%s", n)).(map[string]any)
+
+		cfg, _ := facades.Cfg.Get("queue.rabbitmq." + name).(map[string]any)
+
 		return rabbitmq.NewRabbitMQ(cfg)
 	}
 
-	return nil, fmt.Errorf("invalid driver: %s, only support rabbitmq", driver)
+	return nil, fmt.Errorf("invalid driver: %s, only support RabbitMQ", driver)
 }
 
-func (r *Queue) Channel(driver string, name ...string) (queue.Driver, error) {
+func (r *Queue) Channel(driver string, name string) (queue.Driver, error) {
 
-	n := "default"
-
-	if len(name) == 1 && name[0] != "" {
-		n = name[0]
-	}
-
-	key := fmt.Sprintf("%s_%s", driver, n)
+	key := fmt.Sprintf("%s_%s", driver, name)
 
 	if dri, exist := r.drivers[key]; exist {
 		return dri, nil
 	}
 
-	dri, err := NewDriver(driver, name...)
+	dri, err := NewDriver(driver, name)
 	if err != nil {
 		return nil, err
 	}
