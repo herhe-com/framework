@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/herhe-com/framework/contracts/filesystem"
-	"github.com/herhe-com/framework/filesystem/util"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/samber/lo"
-	"github.com/spf13/viper"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/herhe-com/framework/contracts/filesystem"
+	"github.com/herhe-com/framework/filesystem/util"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/samber/lo"
+	"github.com/spf13/viper"
 )
 
 /*

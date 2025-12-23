@@ -1,10 +1,11 @@
 package util
 
 import (
-	"github.com/herhe-com/framework/contracts/filesystem"
-	"github.com/herhe-com/framework/support/file"
 	"path"
 	"strings"
+
+	"github.com/herhe-com/framework/contracts/filesystem"
+	"github.com/herhe-com/framework/support/file"
 )
 
 const MaxFileNum = 100

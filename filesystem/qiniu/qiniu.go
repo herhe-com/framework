@@ -3,7 +3,13 @@ package qiniu
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/facades"
 	"github.com/herhe-com/framework/filesystem/util"
@@ -13,10 +19,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
 	"github.com/spf13/viper"
-	"io"
-	"os"
-	"strings"
-	"time"
 )
 
 /*
@@ -46,7 +48,7 @@ func NewQiniu(ctx context.Context, configs map[string]any) (*Qiniu, error) {
 
 	cfg.SetDefault("qiniu.delimiter", "/")
 
-	server := facades.Cfg.GetString("server.name")
+	server := facades.Cfg.GetString("app.name")
 	access := cfg.GetString("qiniu.access")
 	secret := cfg.GetString("qiniu.secret")
 	bucket := cfg.GetString("qiniu.bucket")
@@ -56,7 +58,7 @@ func NewQiniu(ctx context.Context, configs map[string]any) (*Qiniu, error) {
 
 	q := &Qiniu{
 		ctx:       ctx,
-		redis:     facades.Redis,
+		redis:     facades.Redis.Default(),
 		key:       fmt.Sprintf("%s:qiniu:token:%s", server, access),
 		access:    access,
 		secret:    secret,
@@ -358,7 +360,7 @@ func (r *Qiniu) Token() (token string) {
 		token, err = r.redis.Get(r.ctx, r.key).Result()
 	}
 
-	if r.redis == nil || err == redis.Nil {
+	if r.redis == nil || errors.Is(err, redis.Nil) {
 
 		policy := storage.PutPolicy{
 			Scope:   r.bucket,
