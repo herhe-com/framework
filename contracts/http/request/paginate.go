@@ -1,8 +1,8 @@
 package request
 
 type Paginate struct {
-	Page int `form:"page" json:"page" query:"page" valid:"omitempty,number,gte=0" label:"页码"`
-	Size int `form:"size" json:"size" query:"size" valid:"omitempty,number,gte=0,lte=20" label:"页数"`
+	Page int `form:"page" json:"page" query:"page" default:"1" validate:"omitempty,number,gte=0" label:"页码"`
+	Size int `form:"size" json:"size" query:"size" default:"15" validate:"omitempty,number,gte=0,lte=50" label:"页数"`
 }
 
 func (p *Paginate) GetPage() int {
