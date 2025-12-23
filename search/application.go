@@ -2,6 +2,7 @@ package search
 
 import (
 	"fmt"
+
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/search"
 	"github.com/herhe-com/framework/facades"
@@ -26,7 +27,7 @@ func NewSearch() *Search {
 	driver, err := NewDriver(defaultDriver)
 
 	if err != nil {
-		color.Errorln("[search] %s\n", err)
+		color.Errorf("[search] %s", err)
 		return nil
 	}
 
@@ -48,7 +49,7 @@ func NewDriver(driver string) (search.Driver, error) {
 		return elasticsearch.NewClient()
 	}
 
-	return nil, fmt.Errorf("invalid driver: %s, only support rabbitmq", driver)
+	return nil, fmt.Errorf("invalid driver: %s, only support %s, %s", driver, search.DriverMeiliSearch, search.DriverElasticSearch)
 }
 
 func (r *Search) Channel(driver string) (search.Driver, error) {

@@ -19,7 +19,7 @@ func (receiver Client) Del(index string) (err error) {
 
 	idx := receiver.client.Index(receiver.index(index))
 
-	_, err = idx.DeleteAllDocuments()
+	_, err = idx.DeleteAllDocuments(nil)
 
 	return err
 }
@@ -28,7 +28,9 @@ func (receiver Client) Save(index, key string, doc map[string]any) (err error) {
 
 	idx := receiver.client.Index(receiver.index(index))
 
-	_, err = idx.AddDocuments([]any{doc}, key)
+	_, err = idx.AddDocuments([]any{doc}, &meilisearch.DocumentOptions{
+		PrimaryKey: &key,
+	})
 
 	return err
 }
@@ -48,7 +50,7 @@ func (receiver Client) Delete(index, id string) error {
 
 	idx := receiver.client.Index(receiver.index(index))
 
-	_, err := idx.DeleteDocument(id)
+	_, err := idx.DeleteDocument(id, nil)
 
 	return err
 }
@@ -75,8 +77,11 @@ func (receiver Client) Search(index, query string, request search.Request) (resu
 	}
 
 	for _, item := range resp.Hits {
-		if val, ok := item.(map[string]any); ok {
-			result.Data = append(result.Data, val)
+
+		var data map[string]any
+
+		if err = item.DecodeInto(&data); err != nil {
+			result.Data = append(result.Data, data)
 		}
 	}
 
