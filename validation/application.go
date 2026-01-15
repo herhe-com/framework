@@ -43,7 +43,6 @@ import (
 	zhTWTranslation "github.com/go-playground/validator/v10/translations/zh_tw"
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/facades"
-	"github.com/hertz-contrib/binding/go_playground"
 )
 
 var (
@@ -52,30 +51,27 @@ var (
 
 func NewApplication() {
 
-	valid := go_playground.NewValidator()
+	valid := validator.New(validator.WithRequiredStructEnabled())
 
-	valid.SetValidateTag("validate")
+	valid.SetTagName("validate")
 
 	tran, language := translator()
 
 	uni := ut.New(tran, tran)
 	trans, _ = uni.GetTranslator(language)
 
-	////获取 CloudWeGo 的校验器
-	vd := valid.Engine().(*validator.Validate)
-
-	vd.RegisterTagNameFunc(func(field reflect.StructField) string {
+	valid.RegisterTagNameFunc(func(field reflect.StructField) string {
 		return field.Tag.Get(facades.Cfg.GetString("validation.label", "label"))
 	})
 
-	if err := register(vd, trans, language); err != nil {
+	if err := register(valid, trans, language); err != nil {
 		color.Warnf("validator register error: %v", err)
 	}
 
 	//注册翻译器
-	translations(vd, trans, language)
+	translations(valid, trans, language)
 
-	translation(vd, trans, language)
+	translation(valid, trans, language)
 
 	facades.Validator = valid
 }

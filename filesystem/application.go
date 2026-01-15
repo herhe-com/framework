@@ -9,6 +9,7 @@ import (
 	"github.com/herhe-com/framework/facades"
 	"github.com/herhe-com/framework/filesystem/minio"
 	"github.com/herhe-com/framework/filesystem/qiniu"
+	"github.com/herhe-com/framework/filesystem/s3"
 )
 
 const (
@@ -59,8 +60,9 @@ func NewDriver(driver string) (filesystem.Driver, error) {
 	//	return NewOss(ctx, disk)
 	//case DriverCos:
 	//	return NewCos(ctx, disk)
-	//case DriverS3:
-	//	return NewS3(ctx, disk)
+	case DriverS3:
+		cfg, _ := facades.Cfg.Get("filesystem.s3").(map[string]any)
+		return s3.NewS3(ctx, cfg)
 	case DriverMinio:
 		cfg, _ := facades.Cfg.Get("filesystem.minio").(map[string]any)
 		return minio.NewMinio(ctx, cfg)
@@ -69,7 +71,7 @@ func NewDriver(driver string) (filesystem.Driver, error) {
 		return qiniu.NewQiniu(ctx, cfg)
 	}
 
-	return nil, fmt.Errorf("invalid driver: %s, only support local, minio, qiniu", driver)
+	return nil, fmt.Errorf("invalid driver: %s, only support local, minio, qiniu, s3", driver)
 }
 
 func (r *Storage) Disk(disk string) filesystem.Driver {

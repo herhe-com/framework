@@ -6,6 +6,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/config"
+	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/herhe-com/framework/facades"
 	"github.com/hertz-contrib/swagger"
@@ -22,14 +23,16 @@ func (*ServerProvider) Register() console.Console {
 		Name: "启动程序",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			hp := net.JoinHostPort(facades.Cfg.GetString("server.address"), facades.Cfg.GetString("server.port"))
+			hp := net.JoinHostPort(facades.Cfg.GetString("server.address", "0.0.0.0"), facades.Cfg.GetString("server.port", "9600"))
 
 			options := []config.Option{
 				server.WithHostPorts(hp),
 			}
 
 			if facades.Validator != nil {
-				options = append(options, server.WithCustomValidator(facades.Validator))
+				options = append(options, server.WithCustomValidatorFunc(func(_ *protocol.Request, req interface{}) error {
+					return facades.Validator.Struct(req)
+				}))
 			}
 
 			if facades.Cfg.GetBool("app.debug") {

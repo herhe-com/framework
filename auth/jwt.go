@@ -10,7 +10,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/dromara/carbon/v2"
 	"github.com/dromara/dongle"
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/herhe-com/framework/contracts/auth"
 	"github.com/herhe-com/framework/facades"
 	"github.com/redis/go-redis/v9"
@@ -71,7 +71,7 @@ func BlacklistOfJwtValue(c context.Context, ctx *app.RequestContext) (bool, erro
 		expires = maxExpired
 	}
 
-	return Blacklist(c, now.Timestamp(), expires, BlacklistOfJwtName(ctx)), nil
+	return Blacklist(c, now.Timestamp(), expires, "jwt", Claims(ctx).ID), nil
 }
 
 func MakeJWToken(claims auth.Claims, secrets ...string) (token string, err error) {
@@ -123,9 +123,7 @@ func CheckJWToken(claims *auth.Claims, token string, secrets ...string) (refresh
 		return []byte(secret), nil
 	})
 
-	var valid *jwt.ValidationError
-
-	if err != nil && (!errors.As(err, &valid) || !errors.Is(err, jwt.ErrTokenExpired)) {
+	if err != nil && !errors.Is(err, jwt.ErrTokenExpired) {
 		return false, err
 	}
 
@@ -133,15 +131,18 @@ func CheckJWToken(claims *auth.Claims, token string, secrets ...string) (refresh
 
 	sub := facades.Cfg.GetString("jwt.sub")
 
-	if !claims.VerifyIssuer(Issuer(sub), true) {
+	// Verify issuer
+	if claims.Issuer != Issuer(sub) {
 		return false, jwt.ErrTokenUsedBeforeIssued
 	}
 
-	if !claims.VerifyNotBefore(now.StdTime(), true) {
+	// Verify not before
+	if claims.NotBefore != nil && now.StdTime().Before(claims.NotBefore.Time) {
 		return false, jwt.ErrTokenUsedBeforeIssued
 	}
 
-	if !claims.VerifyExpiresAt(now.StdTime(), true) {
+	// Verify expiration
+	if claims.ExpiresAt != nil && now.StdTime().After(claims.ExpiresAt.Time) {
 
 		lifetime := claims.ExpiresAt.Sub(claims.IssuedAt.Time).Seconds()
 
@@ -151,7 +152,7 @@ func CheckJWToken(claims *auth.Claims, token string, secrets ...string) (refresh
 
 		claims.ExpiresAt = jwt.NewNumericDate(claims.ExpiresAt.Add(time.Second * time.Duration(lifetime)))
 
-		if claims.VerifyExpiresAt(now.StdTime(), true) {
+		if claims.ExpiresAt != nil && now.StdTime().Before(claims.ExpiresAt.Time) {
 			return true, jwt.ErrTokenExpired
 		}
 

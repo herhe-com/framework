@@ -21,7 +21,7 @@ func NewClient() (*Client, error) {
 		secret: facades.Cfg.GetString("search.engine.meilisearch.secret"),
 	}
 
-	if err := facades.Validator.ValidateStruct(c); err != nil {
+	if err := facades.Validator.Struct(c); err != nil {
 		return nil, err
 	}
 

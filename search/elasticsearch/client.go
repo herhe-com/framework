@@ -25,7 +25,7 @@ func NewClient() (*Client, error) {
 		password: facades.Cfg.GetString("search.engine.elasticsearch.password"),
 	}
 
-	if err := facades.Validator.ValidateStruct(client); err != nil {
+	if err := facades.Validator.Struct(client); err != nil {
 		return nil, err
 	}
 

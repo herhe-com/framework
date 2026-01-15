@@ -1,5 +1,7 @@
 package facades
 
-import "github.com/hertz-contrib/binding/go_playground"
+import (
+	"github.com/go-playground/validator/v10"
+)
 
-var Validator *go_playground.Validator
+var Validator *validator.Validate

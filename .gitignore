@@ -5,6 +5,7 @@
 .idea
 *bak
 .vscode
+.claude
 
 # visual studio code
 .history
