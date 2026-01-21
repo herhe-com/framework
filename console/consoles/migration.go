@@ -2,7 +2,6 @@ package consoles
 
 import (
 	"database/sql"
-	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -11,8 +10,8 @@ import (
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/herhe-com/framework/database/database"
 	"github.com/herhe-com/framework/facades"
-	"github.com/manifoldco/promptui"
 	"github.com/pressly/goose/v3"
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
@@ -105,24 +104,27 @@ func (that *MigrationProvider) make(cmd *cobra.Command, args []string) {
 
 	name, _ := cmd.Flags().GetString("name")
 
-	// 如果参数为空，使用 promptui 进行交互式输入
+	// 如果参数为空，使用 pterm 进行交互式输入
 	if name == "" {
-		prompt := promptui.Prompt{
-			Label: "表名",
-			Validate: func(str string) error {
-				s := strings.TrimSpace(str)
-				if s == "" {
-					return errors.New("表名不能为空")
-				} else if s != str {
-					return errors.New("表名不能包含空字符")
-				}
-				return nil
-			},
+		var err error
+		name, err = pterm.DefaultInteractiveTextInput.
+			WithDefaultText("表名").
+			WithOnInterruptFunc(func() {
+				color.Errorln("输入取消")
+			}).
+			Show()
+
+		if err != nil {
+			color.Errorln("输入取消")
+			return
 		}
 
-		var err error
-		if name, err = prompt.Run(); err != nil {
-			color.Errorln("输入取消")
+		s := strings.TrimSpace(name)
+		if s == "" {
+			color.Errorln("表名不能为空")
+			return
+		} else if s != name {
+			color.Errorln("表名不能包含空字符")
 			return
 		}
 	}
@@ -145,43 +147,45 @@ func (that *MigrationProvider) commit(cmd *cobra.Command, args []string) {
 	all, _ := cmd.Flags().GetBool("all")
 	step, _ := cmd.Flags().GetInt("step")
 
-	// 如果没有任何参数，使用 promptui 进行交互式选择
+	// 如果没有任何参数，使用 pterm 进行交互式选择
 	if !one && !all && step == 0 {
-		prompt := promptui.Select{
-			Label: "请选择迁移方式",
-			Items: []string{"执行一次迁移", "执行所有迁移", "执行指定步骤数"},
-		}
+		options := []string{"执行一次迁移", "执行所有迁移", "执行指定步骤数"}
+		selectedOption, err := pterm.DefaultInteractiveSelect.
+			WithOptions(options).
+			WithDefaultText("请选择迁移方式").
+			Show()
 
-		index, _, err := prompt.Run()
 		if err != nil {
 			color.Errorln("选择取消")
 			return
 		}
 
-		switch index {
-		case 0:
+		switch selectedOption {
+		case "执行一次迁移":
 			one = true
-		case 1:
+		case "执行所有迁移":
 			all = true
-		case 2:
-			stepPrompt := promptui.Prompt{
-				Label: "请输入执行步骤数",
-				Validate: func(str string) error {
-					s, err := strconv.Atoi(strings.TrimSpace(str))
-					if err != nil || s <= 0 {
-						return errors.New("步骤数必须是大于0的整数")
-					}
-					return nil
-				},
-			}
-
+		case "执行指定步骤数":
 			var stepStr string
-			if stepStr, err = stepPrompt.Run(); err != nil {
+			stepStr, err = pterm.DefaultInteractiveTextInput.
+				WithDefaultText("请输入执行步骤数").
+				WithOnInterruptFunc(func() {
+					color.Errorln("输入取消")
+				}).
+				Show()
+
+			if err != nil {
 				color.Errorln("输入取消")
 				return
 			}
 
-			step, _ = strconv.Atoi(stepStr)
+			s, err := strconv.Atoi(strings.TrimSpace(stepStr))
+			if err != nil || s <= 0 {
+				color.Errorln("步骤数必须是大于0的整数")
+				return
+			}
+
+			step = s
 		}
 	}
 
@@ -248,43 +252,45 @@ func (that *MigrationProvider) rollback(cmd *cobra.Command, args []string) {
 	all, _ := cmd.Flags().GetBool("all")
 	step, _ := cmd.Flags().GetInt("step")
 
-	// 如果没有任何参数，使用 promptui 进行交互式选择
+	// 如果没有任何参数，使用 pterm 进行交互式选择
 	if !one && !all && step == 0 {
-		prompt := promptui.Select{
-			Label: "请选择回滚方式",
-			Items: []string{"回滚最近的一次", "回滚所有迁移", "回滚指定步骤数"},
-		}
+		options := []string{"回滚最近的一次", "回滚所有迁移", "回滚指定步骤数"}
+		selectedOption, err := pterm.DefaultInteractiveSelect.
+			WithOptions(options).
+			WithDefaultText("请选择回滚方式").
+			Show()
 
-		index, _, err := prompt.Run()
 		if err != nil {
 			color.Errorln("选择取消")
 			return
 		}
 
-		switch index {
-		case 0:
+		switch selectedOption {
+		case "回滚最近的一次":
 			one = true
-		case 1:
+		case "回滚所有迁移":
 			all = true
-		case 2:
-			stepPrompt := promptui.Prompt{
-				Label: "请输入回滚步骤数",
-				Validate: func(str string) error {
-					s, err := strconv.Atoi(strings.TrimSpace(str))
-					if err != nil || s <= 0 {
-						return errors.New("步骤数必须是大于0的整数")
-					}
-					return nil
-				},
-			}
-
+		case "回滚指定步骤数":
 			var stepStr string
-			if stepStr, err = stepPrompt.Run(); err != nil {
+			stepStr, err = pterm.DefaultInteractiveTextInput.
+				WithDefaultText("请输入回滚步骤数").
+				WithOnInterruptFunc(func() {
+					color.Errorln("输入取消")
+				}).
+				Show()
+
+			if err != nil {
 				color.Errorln("输入取消")
 				return
 			}
 
-			step, _ = strconv.Atoi(stepStr)
+			s, err := strconv.Atoi(strings.TrimSpace(stepStr))
+			if err != nil || s <= 0 {
+				color.Errorln("步骤数必须是大于0的整数")
+				return
+			}
+
+			step = s
 		}
 	}
 
