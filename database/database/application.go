@@ -10,6 +10,7 @@ import (
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/facades"
 	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
@@ -17,6 +18,7 @@ import (
 
 const DriverMySQL string = "mysql"
 const DriverSQLite string = "sqlite"
+const DriverPostgreSQL string = "postgresql"
 
 type Database struct {
 	driver  *gorm.DB
@@ -50,6 +52,8 @@ func NewDriver(driver string, name string) (*gorm.DB, string, error) {
 		return newMysqlClient(name)
 	case DriverSQLite:
 		return newSQLiteClient(name)
+	case DriverPostgreSQL:
+		return newPostgreSQLClient(name)
 	}
 
 	return nil, "", fmt.Errorf("invalid driver: %s", driver)
@@ -131,6 +135,61 @@ func newSQLiteClient(name string) (*gorm.DB, string, error) {
 
 	if facades.Cfg.GetBool("app.debug") {
 		config.Logger = logger.Default.LogMode(logger.Info)
+		config.PrepareStmt = false
+	}
+
+	open, err := gorm.Open(dialectal, &config)
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	return open, name, nil
+}
+
+func newPostgreSQLClient(name string) (*gorm.DB, string, error) {
+
+	var username, password, host, port, prefix, db, sslmode, timezone string
+
+	username = facades.Cfg.GetString("database.postgresql." + name + ".username")
+	password = facades.Cfg.GetString("database.postgresql." + name + ".password")
+	host = facades.Cfg.GetString("database.postgresql." + name + ".host")
+	port = facades.Cfg.GetString("database.postgresql."+name+".port", "5432")
+	prefix = facades.Cfg.GetString("database.postgresql."+name+".prefix", "")
+	db = facades.Cfg.GetString("database.postgresql." + name + ".db")
+	sslmode = facades.Cfg.GetString("database.postgresql."+name+".sslmode", "disable")
+	timezone = facades.Cfg.GetString("database.postgresql."+name+".timezone", "Asia/Shanghai")
+	log := facades.Cfg.GetString("database.postgresql."+name+".log_mode", "error")
+
+	if username == "" || password == "" || host == "" || db == "" {
+		return nil, "", errors.New("invalid database config: postgresql")
+	}
+
+	logMode := logger.Error
+
+	switch log {
+	case "error":
+		logMode = logger.Error
+	case "info":
+		logMode = logger.Info
+	case "warn":
+		logMode = logger.Warn
+	case "silent":
+		logMode = logger.Silent
+	}
+
+	dialectal := postgres.Open(postgreDSN(username, password, host, port, db, sslmode, timezone))
+
+	config := gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix: facades.Cfg.GetString(prefix),
+		},
+		Logger:                 logger.Default.LogMode(logMode),
+		SkipDefaultTransaction: true,
+		PrepareStmt:            true,
+	}
+
+	if facades.Cfg.GetBool("app.debug") {
 		config.PrepareStmt = false
 	}
 
