@@ -292,6 +292,16 @@ func (r *Minio) TemporaryUrl(file string, timer time.Duration) (string, error) {
 	return resignedURL.String(), nil
 }
 
+func (r *Minio) PresignedUploadUrl(file string, timer time.Duration) (string, error) {
+	file = strings.TrimPrefix(file, "/")
+	presignedURL, err := r.instance.PresignedPutObject(r.ctx, r.bucket, file, timer)
+	if err != nil {
+		return "", err
+	}
+
+	return presignedURL.String(), nil
+}
+
 func (r *Minio) Url(file string) string {
 	realUrl := strings.TrimSuffix(r.domain, "/")
 	if !strings.HasSuffix(realUrl, r.bucket) {

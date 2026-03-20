@@ -1,4 +1,4 @@
-package database
+package orm
 
 import (
 	"github.com/herhe-com/framework/contracts/service"

@@ -43,7 +43,7 @@ func Temporary(c context.Context, ctx *app.RequestContext) (role *auth.RoleOfTem
 	return role, nil
 }
 
-func DoTemporary(c context.Context, ctx *app.RequestContext, platform uint16, org, organization string, clique *string, backs ...*auth.RoleOfTemporary) (err error) {
+func SetTemporaryRole(c context.Context, ctx *app.RequestContext, platform uint16, org, organization string, clique *string, backs ...*auth.RoleOfTemporary) (err error) {
 
 	data := auth.RoleOfTemporary{
 		Platform:     platform,
@@ -67,7 +67,7 @@ func DoTemporary(c context.Context, ctx *app.RequestContext, platform uint16, or
 	return nil
 }
 
-func DoTemporaryOfDelete(c context.Context, ctx *app.RequestContext) (err error) {
+func DeleteTemporaryRole(c context.Context, ctx *app.RequestContext) (err error) {
 
 	_, err = facades.Redis.Default().Del(c, RoleOfName(ID(ctx))).Result()
 
@@ -78,7 +78,7 @@ func DoTemporaryOfDelete(c context.Context, ctx *app.RequestContext) (err error)
 	return nil
 }
 
-func DoTemporaryOfRefresh(c context.Context, ctx *app.RequestContext) (err error) {
+func RefreshTemporaryRole(c context.Context, ctx *app.RequestContext) (err error) {
 
 	lifetime := facades.Cfg.GetInt("jwt.lifetime")
 

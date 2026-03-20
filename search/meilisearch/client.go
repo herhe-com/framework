@@ -13,25 +13,19 @@ type Client struct {
 	secret string `valid:"required"`
 }
 
-func NewClient() (*Client, error) {
+func NewClient(name string) (*Client, error) {
 
 	c := &Client{
-		prefix: facades.Cfg.GetString("search.engine.meilisearch.prefix"),
-		host:   facades.Cfg.GetString("search.engine.meilisearch.host"),
-		secret: facades.Cfg.GetString("search.engine.meilisearch.secret"),
+		prefix: facades.Cfg.GetString("search.meilisearch." + name + ".prefix"),
+		host:   facades.Cfg.GetString("search.meilisearch." + name + ".host"),
+		secret: facades.Cfg.GetString("search.meilisearch." + name + ".secret"),
 	}
 
 	if err := facades.Validator.Struct(c); err != nil {
 		return nil, err
 	}
 
-	options := make([]meilisearch.Option, 0)
-
-	if c.secret != "" {
-		options = append(options, meilisearch.WithAPIKey(c.secret))
-	}
-
-	c.client = meilisearch.New(c.host, options...)
+	c.client = meilisearch.New(c.host, meilisearch.WithAPIKey(c.secret))
 
 	return c, nil
 }

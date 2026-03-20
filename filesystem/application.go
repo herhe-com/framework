@@ -7,18 +7,19 @@ import (
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/facades"
+	"github.com/herhe-com/framework/filesystem/cos"
 	"github.com/herhe-com/framework/filesystem/minio"
+	"github.com/herhe-com/framework/filesystem/oss"
 	"github.com/herhe-com/framework/filesystem/qiniu"
 	"github.com/herhe-com/framework/filesystem/s3"
 )
 
 const (
-	DriverS3     string = "s3"
-	DriverOss    string = "oss"
-	DriverCos    string = "cos"
-	DriverMinio  string = "minio"
-	DriverQiniu  string = "qiniu"
-	DriverCustom string = "custom"
+	DriverS3    string = "s3"
+	DriverOss   string = "oss"
+	DriverCos   string = "cos"
+	DriverMinio string = "minio"
+	DriverQiniu string = "qiniu"
 )
 
 type Storage struct {
@@ -28,64 +29,66 @@ type Storage struct {
 
 func NewStorage() *Storage {
 
-	defaultDisk := facades.Cfg.GetString("filesystem.driver")
+	defaultDriver := facades.Cfg.GetString("filesystem.driver")
 
-	if defaultDisk == "" {
-		color.Redln("[filesystem] please set default disk")
+	if defaultDriver == "" {
+		color.Redln("[filesystem] please set default driver")
 		return nil
 	}
 
-	driver, err := NewDriver(defaultDisk)
+	driver, err := NewDriver(defaultDriver, "default")
+
 	if err != nil {
 		color.Redf("[filesystem] %s\n", err)
-
 		return nil
 	}
 
 	drivers := make(map[string]filesystem.Driver)
-	drivers[defaultDisk] = driver
+	key := fmt.Sprintf("%s_%s", defaultDriver, "default")
+	drivers[key] = driver
 
 	return &Storage{
-		Driver:  driver,
 		drivers: drivers,
+		Driver:  driver,
 	}
 }
 
-func NewDriver(driver string) (filesystem.Driver, error) {
+func NewDriver(driver string, disk string) (filesystem.Driver, error) {
 
 	ctx := context.Background()
+	configKey := fmt.Sprintf("filesystem.disks.%s", disk)
+	cfg, _ := facades.Cfg.Get(configKey).(map[string]any)
 
 	switch driver {
-	//case DriverOss:
-	//	return NewOss(ctx, disk)
-	//case DriverCos:
-	//	return NewCos(ctx, disk)
+	case DriverOss:
+		return oss.NewOSS(ctx, cfg)
+	case DriverCos:
+		return cos.NewCOS(ctx, cfg)
 	case DriverS3:
-		cfg, _ := facades.Cfg.Get("filesystem.s3").(map[string]any)
 		return s3.NewS3(ctx, cfg)
 	case DriverMinio:
-		cfg, _ := facades.Cfg.Get("filesystem.minio").(map[string]any)
 		return minio.NewMinio(ctx, cfg)
 	case DriverQiniu:
-		cfg, _ := facades.Cfg.Get("filesystem.qiniu").(map[string]any)
 		return qiniu.NewQiniu(ctx, cfg)
 	}
 
-	return nil, fmt.Errorf("invalid driver: %s, only support local, minio, qiniu, s3", driver)
+	return nil, fmt.Errorf("invalid driver: %s, only support oss, cos, s3, minio, qiniu", driver)
 }
 
-func (r *Storage) Disk(disk string) filesystem.Driver {
+func (r *Storage) Disk(driver string, disk string) (filesystem.Driver, error) {
 
-	if driver, exist := r.drivers[disk]; exist {
-		return driver
+	key := fmt.Sprintf("%s_%s", driver, disk)
+
+	if dri, exist := r.drivers[key]; exist {
+		return dri, nil
 	}
 
-	driver, err := NewDriver(disk)
+	dri, err := NewDriver(driver, disk)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	r.drivers[disk] = driver
+	r.drivers[key] = dri
 
-	return driver
+	return dri, nil
 }

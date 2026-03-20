@@ -1,4 +1,4 @@
-package s3
+package cos
 
 import (
 	"bytes"
@@ -15,41 +15,45 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/spf13/viper"
+
 	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/filesystem/util"
 	"github.com/samber/lo"
-	"github.com/spf13/viper"
 )
 
 /*
- * S3 OSS
- * Document: https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html
- * Example: https://github.com/aws/aws-sdk-go-v2/tree/main/examples/s3
+ * Tencent COS (Cloud Object Storage)
+ * Document: https://cloud.tencent.com/document/product/436
+ * Compatible with S3 API
  */
 
-type S3 struct {
+type COS struct {
 	ctx      context.Context
 	instance *s3.Client
 	bucket   string
-	disk     string
 	domain   string
 }
 
-func NewS3(ctx context.Context, configs map[string]any) (*S3, error) {
+func NewCOS(ctx context.Context, configs map[string]any) (*COS, error) {
 
 	cfg := viper.New()
 
-	cfg.Set("s3", configs)
+	cfg.Set("cos", configs)
 
-	access := cfg.GetString("s3.access")
-	secret := cfg.GetString("s3.secret")
-	region := cfg.GetString("s3.region")
-	bucket := cfg.GetString("s3.bucket")
-	domain := cfg.GetString("s3.domain")
-	endpoint := cfg.GetString("s3.endpoint")
+	access := cfg.GetString("cos.access")
+	secret := cfg.GetString("cos.secret")
+	region := cfg.GetString("cos.region")
+	bucket := cfg.GetString("cos.bucket")
+	domain := cfg.GetString("cos.domain")
+	endpoint := cfg.GetString("cos.endpoint")
 
 	if region == "" {
-		region = "us-east-1"
+		region = "ap-guangzhou"
+	}
+
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("https://cos.%s.myqcloud.com", region)
 	}
 
 	opt, err := config.LoadDefaultConfig(ctx,
@@ -63,20 +67,20 @@ func NewS3(ctx context.Context, configs map[string]any) (*S3, error) {
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("init s3 disk error: %v", err)
+		return nil, fmt.Errorf("init cos disk error: %v", err)
 	}
 
-	return &S3{
+	return &COS{
 		ctx: ctx,
 		instance: s3.NewFromConfig(opt, func(options *s3.Options) {
-			options.UsePathStyle = true
+			options.UsePathStyle = false
 		}),
 		bucket: bucket,
 		domain: domain,
 	}, nil
 }
 
-func (r *S3) Dirs(path string) (dirs []filesystem.Pathname, err error) {
+func (r *COS) Dirs(path string) (dirs []filesystem.Pathname, err error) {
 
 	prefix := util.ValidPath(path)
 
@@ -101,7 +105,7 @@ func (r *S3) Dirs(path string) (dirs []filesystem.Pathname, err error) {
 	return dirs, nil
 }
 
-func (r *S3) Files(path string) (files []filesystem.Pathname, err error) {
+func (r *COS) Files(path string) (files []filesystem.Pathname, err error) {
 
 	prefix := util.ValidPath(path)
 
@@ -126,7 +130,7 @@ func (r *S3) Files(path string) (files []filesystem.Pathname, err error) {
 	return files, nil
 }
 
-func (r *S3) List(path string) (list []filesystem.Pathname, err error) {
+func (r *COS) List(path string) (list []filesystem.Pathname, err error) {
 
 	prefix := util.ValidPath(path)
 
@@ -161,7 +165,7 @@ func (r *S3) List(path string) (list []filesystem.Pathname, err error) {
 	return list, nil
 }
 
-func (r *S3) Copy(originFile, targetFile string) error {
+func (r *COS) Copy(originFile, targetFile string) error {
 	originFile = strings.TrimPrefix(originFile, "/")
 	targetFile = strings.TrimPrefix(targetFile, "/")
 
@@ -175,7 +179,7 @@ func (r *S3) Copy(originFile, targetFile string) error {
 	return err
 }
 
-func (r *S3) Delete(files ...string) error {
+func (r *COS) Delete(files ...string) error {
 
 	for _, file := range files {
 		file = strings.TrimPrefix(file, "/")
@@ -193,7 +197,7 @@ func (r *S3) Delete(files ...string) error {
 	return nil
 }
 
-func (r *S3) DeleteDirectory(directory string) error {
+func (r *COS) DeleteDirectory(directory string) error {
 	directory = strings.TrimPrefix(directory, "/")
 
 	if !strings.HasSuffix(directory, "/") {
@@ -212,7 +216,7 @@ func (r *S3) DeleteDirectory(directory string) error {
 	return nil
 }
 
-func (r *S3) Exists(file string) bool {
+func (r *COS) Exists(file string) bool {
 	file = strings.TrimPrefix(file, "/")
 
 	_, err := r.instance.GetObject(r.ctx, &s3.GetObjectInput{
@@ -223,7 +227,7 @@ func (r *S3) Exists(file string) bool {
 	return err == nil
 }
 
-func (r *S3) MakeDirectory(directory string) error {
+func (r *COS) MakeDirectory(directory string) error {
 	directory = strings.TrimPrefix(directory, "/")
 
 	if !strings.HasSuffix(directory, "/") {
@@ -235,11 +239,11 @@ func (r *S3) MakeDirectory(directory string) error {
 	return r.Put(directory, reader, reader.Size())
 }
 
-func (r *S3) Missing(file string) bool {
+func (r *COS) Missing(file string) bool {
 	return !r.Exists(file)
 }
 
-func (r *S3) Move(oldFile, newFile string) error {
+func (r *COS) Move(oldFile, newFile string) error {
 	if err := r.Copy(oldFile, newFile); err != nil {
 		return err
 	}
@@ -247,11 +251,11 @@ func (r *S3) Move(oldFile, newFile string) error {
 	return r.Delete(oldFile)
 }
 
-func (r *S3) Path(file string) string {
+func (r *COS) Path(file string) string {
 	return file
 }
 
-func (r *S3) Put(key string, file io.Reader, size int64) (err error) {
+func (r *COS) Put(key string, file io.Reader, size int64) (err error) {
 
 	var buffer []byte
 
@@ -270,11 +274,11 @@ func (r *S3) Put(key string, file io.Reader, size int64) (err error) {
 	return err
 }
 
-func (r *S3) PutFile(filePath string, source filesystem.File) (string, error) {
+func (r *COS) PutFile(filePath string, source filesystem.File) (string, error) {
 	return r.PutFileAs(filePath, source, lo.RandomString(40, lo.AlphanumericCharset))
 }
 
-func (r *S3) PutFileAs(filePath string, source filesystem.File, name string) (string, error) {
+func (r *COS) PutFileAs(filePath string, source filesystem.File, name string) (string, error) {
 
 	fullPath, err := util.FullPathOfFile(filePath, source, name)
 	if err != nil {
@@ -295,7 +299,7 @@ func (r *S3) PutFileAs(filePath string, source filesystem.File, name string) (st
 	return fullPath, nil
 }
 
-func (r *S3) Size(file string) (int64, error) {
+func (r *COS) Size(file string) (int64, error) {
 	file = strings.TrimPrefix(file, "/")
 
 	output, err := r.instance.HeadObject(r.ctx, &s3.HeadObjectInput{
@@ -309,7 +313,7 @@ func (r *S3) Size(file string) (int64, error) {
 	return aws.ToInt64(output.ContentLength), nil
 }
 
-func (r *S3) TemporaryUrl(file string, timer time.Duration) (string, error) {
+func (r *COS) TemporaryUrl(file string, timer time.Duration) (string, error) {
 	file = strings.TrimPrefix(file, "/")
 
 	presignClient := s3.NewPresignClient(r.instance)
@@ -328,7 +332,7 @@ func (r *S3) TemporaryUrl(file string, timer time.Duration) (string, error) {
 	return request.URL, nil
 }
 
-func (r *S3) PresignedUploadUrl(file string, timer time.Duration) (string, error) {
+func (r *COS) PresignedUploadUrl(file string, timer time.Duration) (string, error) {
 	file = strings.TrimPrefix(file, "/")
 
 	presignClient := s3.NewPresignClient(r.instance)
@@ -347,7 +351,7 @@ func (r *S3) PresignedUploadUrl(file string, timer time.Duration) (string, error
 	return request.URL, nil
 }
 
-func (r *S3) Url(file string) string {
+func (r *COS) Url(file string) string {
 	realUrl := strings.TrimSuffix(r.domain, "/")
 	if !strings.HasSuffix(realUrl, r.bucket) {
 		realUrl += "/" + r.bucket

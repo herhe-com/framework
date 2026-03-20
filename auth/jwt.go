@@ -17,6 +17,28 @@ import (
 	"github.com/samber/lo"
 )
 
+const (
+	// MaxBlacklistExpiry is the maximum expiry time for blacklist entries (7 days)
+	MaxBlacklistExpiry = 7 * 24 * time.Hour
+
+	// MaxRefreshLifetime is the maximum lifetime for token refresh (30 days)
+	MaxRefreshLifetime = 30 * 24 * time.Hour
+
+	// MaxRefreshLifetimeSeconds is MaxRefreshLifetime in seconds
+	MaxRefreshLifetimeSeconds = 86400 * 30
+
+	// luaSetRefreshToken is the Lua script for atomically setting refresh token with expiry
+	luaSetRefreshToken = `
+		local token = redis.call("HSET", KEYS[1], "token", ARGV[1])
+		local created_at = redis.call("HSET", KEYS[1], "created_at", ARGV[2])
+		if token and created_at then
+			redis.call("EXPIREAT", KEYS[1], ARGV[3])
+			return 1
+		end
+		return 0
+	`
+)
+
 // NewJWToken
 //
 //	@Description: 生成 JWT
@@ -65,10 +87,8 @@ func BlacklistOfJwtValue(c context.Context, ctx *app.RequestContext) (bool, erro
 
 	expires := Claims(ctx).ExpiresAt.Sub(now.StdTime()) * time.Second
 
-	maxExpired := time.Hour * 24 * 7
-
-	if expires > maxExpired {
-		expires = maxExpired
+	if expires > MaxBlacklistExpiry {
+		expires = MaxBlacklistExpiry
 	}
 
 	return Blacklist(c, now.Timestamp(), expires, "jwt", Claims(ctx).ID), nil
@@ -146,8 +166,8 @@ func CheckJWToken(claims *auth.Claims, token string, secrets ...string) (refresh
 
 		lifetime := claims.ExpiresAt.Sub(claims.IssuedAt.Time).Seconds()
 
-		if lifetime >= 86400*30 {
-			lifetime = 86400 * 30
+		if lifetime >= MaxRefreshLifetimeSeconds {
+			lifetime = MaxRefreshLifetimeSeconds
 		}
 
 		claims.ExpiresAt = jwt.NewNumericDate(claims.ExpiresAt.Add(time.Second * time.Duration(lifetime)))
@@ -192,19 +212,9 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 
 		if facades.Redis != nil {
 
-			script := `
-				local token = redis.call("HSET", KEYS[1], "token", ARGV[1])
-				local created_at = redis.call("HSET", KEYS[1], "created_at", ARGV[2])
-				if token and created_at then
-					redis.call("EXPIREAT", KEYS[1], ARGV[3])
-					return 1
-				end
-				return 0
-				`
-
 			expire := carbon.CreateFromStdTime(claims.ExpiresAt.Time).AddSeconds(int(lifetime))
 
-			if result, err := facades.Redis.Default().Eval(ctx, script, []string{bk}, token, now.ToDateTimeString(), expire.Timestamp()).Result(); err != nil {
+			if result, err := facades.Redis.Default().Eval(ctx, luaSetRefreshToken, []string{bk}, token, now.ToDateTimeString(), expire.Timestamp()).Result(); err != nil {
 				return "", err
 			} else if fmt.Sprintf("%v", result) != "1" {
 				return "", errors.New("failed to set the refresh token")

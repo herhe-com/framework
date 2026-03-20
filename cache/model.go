@@ -47,6 +47,11 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 		return errors.New("model must be struct")
 	}
 
+	// 检查是否有多个 primary key
+	if err := checkPrimaryKeys(model); err != nil {
+		return err
+	}
+
 	table := lo.SnakeCase(t.Name())
 
 	v := reflect.ValueOf(model)
@@ -85,6 +90,20 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 
 func id(tx *gorm.DB) string {
 
+	// 检查是否有多个 primary key
+	primaryKeyCount := 0
+	for _, field := range tx.Statement.Schema.Fields {
+		if field.PrimaryKey {
+			primaryKeyCount++
+		}
+	}
+
+	if primaryKeyCount > 1 {
+		// 记录错误但不中断流程，返回空字符串表示无法处理
+		tx.AddError(fmt.Errorf("cache model does not support composite primary keys, found %d primary keys", primaryKeyCount))
+		return ""
+	}
+
 	var ids = make([]string, 0)
 
 	for _, field := range tx.Statement.Schema.Fields {
@@ -107,4 +126,32 @@ func id(tx *gorm.DB) string {
 	}
 
 	return strings.Join(ids, "-")
+}
+
+// checkPrimaryKeys 检查模型是否有多个 primary key
+func checkPrimaryKeys(model any) error {
+	// 使用临时 DB 实例解析 schema
+	db := facades.DB.Default()
+	if db == nil {
+		return errors.New("database not initialized")
+	}
+
+	stmt := &gorm.Statement{DB: db}
+	if err := stmt.Parse(model); err != nil {
+		return fmt.Errorf("failed to parse model schema: %w", err)
+	}
+
+	// 统计 primary key 数量
+	primaryKeyCount := 0
+	for _, field := range stmt.Schema.Fields {
+		if field.PrimaryKey {
+			primaryKeyCount++
+		}
+	}
+
+	if primaryKeyCount > 1 {
+		return fmt.Errorf("cache model does not support composite primary keys, found %d primary keys", primaryKeyCount)
+	}
+
+	return nil
 }

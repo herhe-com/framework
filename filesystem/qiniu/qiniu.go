@@ -318,6 +318,18 @@ func (r *Qiniu) TemporaryUrl(key string, timer time.Duration) (url string, err e
 	return url, nil
 }
 
+func (r *Qiniu) PresignedUploadUrl(key string, timer time.Duration) (string, error) {
+
+	key = r.realPath(key)
+
+	policy := storage.PutPolicy{
+		Scope:   fmt.Sprintf("%s:%s", r.bucket, key),
+		Expires: uint64(timer.Seconds()),
+	}
+
+	return policy.UploadToken(r.mac()), nil
+}
+
 func (r *Qiniu) SetRedis(client *redis.Client) {
 	r.redis = client
 }

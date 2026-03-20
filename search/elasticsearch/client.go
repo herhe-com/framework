@@ -15,14 +15,14 @@ type Client struct {
 	password string `valid:"required"`
 }
 
-func NewClient() (*Client, error) {
+func NewClient(name string) (*Client, error) {
 
 	client := &Client{
-		prefix:   facades.Cfg.GetString("search.engine.elasticsearch.prefix"),
-		host:     facades.Cfg.GetString("search.engine.elasticsearch.host"),
-		hosts:    facades.Cfg.GetStrings("search.engine.elasticsearch.hosts"),
-		username: facades.Cfg.GetString("search.engine.elasticsearch.username"),
-		password: facades.Cfg.GetString("search.engine.elasticsearch.password"),
+		prefix:   facades.Cfg.GetString("search.elasticsearch." + name + ".prefix"),
+		host:     facades.Cfg.GetString("search.elasticsearch." + name + ".host"),
+		hosts:    facades.Cfg.GetStrings("search.elasticsearch." + name + ".hosts"),
+		username: facades.Cfg.GetString("search.elasticsearch." + name + ".username"),
+		password: facades.Cfg.GetString("search.elasticsearch." + name + ".password"),
 	}
 
 	if err := facades.Validator.Struct(client); err != nil {

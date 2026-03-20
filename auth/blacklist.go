@@ -17,14 +17,8 @@ func CheckBlacklist(ctx context.Context, args ...any) bool {
 }
 
 func Blacklist(ctx context.Context, value any, expires time.Duration, args ...any) bool {
-
-	_, err := facades.Redis.Default().Set(ctx, KeyBlacklist(args...), value, expires).Result()
-
-	if err == nil {
-		return true
-	}
-
-	return false
+	err := facades.Redis.Default().Set(ctx, KeyBlacklist(args...), value, expires).Err()
+	return err == nil
 }
 
 func KeyBlacklist(args ...any) string {

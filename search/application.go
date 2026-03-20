@@ -24,7 +24,7 @@ func NewSearch() *Search {
 		return nil
 	}
 
-	driver, err := NewDriver(defaultDriver)
+	driver, err := NewDriver(defaultDriver, "default")
 
 	if err != nil {
 		color.Errorf("[search] %s", err)
@@ -32,7 +32,8 @@ func NewSearch() *Search {
 	}
 
 	drivers := make(map[string]search.Driver)
-	drivers[defaultDriver] = driver
+	key := fmt.Sprintf("%s_%s", defaultDriver, "default")
+	drivers[key] = driver
 
 	return &Search{
 		drivers: drivers,
@@ -40,30 +41,32 @@ func NewSearch() *Search {
 	}
 }
 
-func NewDriver(driver string) (search.Driver, error) {
+func NewDriver(driver string, name string) (search.Driver, error) {
 
 	switch driver {
 	case search.DriverMeiliSearch:
-		return meilisearch.NewClient()
+		return meilisearch.NewClient(name)
 	case search.DriverElasticSearch:
-		return elasticsearch.NewClient()
+		return elasticsearch.NewClient(name)
 	}
 
 	return nil, fmt.Errorf("invalid driver: %s, only support %s, %s", driver, search.DriverMeiliSearch, search.DriverElasticSearch)
 }
 
-func (r *Search) Channel(driver string) (search.Driver, error) {
+func (r *Search) Channel(driver string, name string) (search.Driver, error) {
 
-	if dri, exist := r.drivers[driver]; exist {
+	key := fmt.Sprintf("%s_%s", driver, name)
+
+	if dri, exist := r.drivers[key]; exist {
 		return dri, nil
 	}
 
-	dri, err := NewDriver(driver)
+	dri, err := NewDriver(driver, name)
 	if err != nil {
 		return nil, err
 	}
 
-	r.drivers[driver] = dri
+	r.drivers[key] = dri
 
 	return dri, nil
 }

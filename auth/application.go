@@ -3,9 +3,9 @@ package auth
 import (
 	"errors"
 
-	"github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v3"
 	adapter "github.com/casbin/gorm-adapter/v3"
-	"github.com/herhe-com/framework/database/database"
+	"github.com/herhe-com/framework/database/orm"
 	"github.com/herhe-com/framework/facades"
 )
 
@@ -15,7 +15,7 @@ func NewApplication() error {
 		return errors.New("请先初始化数据库")
 	}
 
-	defaultDriver := facades.Cfg.GetString("database.driver", database.DriverMySQL)
+	defaultDriver := facades.Cfg.GetString("database.driver", orm.DriverMySQL)
 
 	prefix := facades.Cfg.GetString("database." + defaultDriver + ".prefix")
 	table := facades.Cfg.GetString("auth.casbin.table")

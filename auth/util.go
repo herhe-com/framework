@@ -2,12 +2,12 @@ package auth
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/herhe-com/framework/contracts/auth"
 	"github.com/herhe-com/framework/facades"
+	"github.com/samber/lo"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -75,21 +75,10 @@ func CheckPassword(password, crypt string) bool {
 
 func DefaultPlatform() uint16 {
 
-	var platform uint16 = 0
-
-	if platforms := facades.Cfg.Get("auth.platforms"); platforms != nil {
-		if values, ok := platforms.([]uint16); ok {
-			if len(values) > 1 {
-				sort.Slice(values, func(i, j int) bool {
-					return values[i] < values[j] // data[i] < data[j] 升序, > 降序
-				})
-			}
-
-			if len(values) >= 1 {
-				platform = values[0]
-			}
-		}
+	platforms, ok := facades.Cfg.Get("auth.platforms").([]uint16)
+	if !ok || len(platforms) == 0 {
+		return 0
 	}
 
-	return platform
+	return lo.Min(platforms)
 }

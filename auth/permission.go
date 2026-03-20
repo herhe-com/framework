@@ -81,6 +81,8 @@ func Modules(platform uint16) []auth.Module {
 //	@return results
 func filter(trees []auth.Tree, platform uint16, permissions []string, ep bool) (results []auth.Tree) {
 
+	results = make([]auth.Tree, 0, len(trees))
+
 	for _, item := range trees {
 
 		mark := false
@@ -115,6 +117,8 @@ func filter(trees []auth.Tree, platform uint16, permissions []string, ep bool) (
 
 func doTrees(permissions []auth.Permission, prefix []string, defaultPlatforms []uint16) (trees []auth.Tree) {
 
+	trees = make([]auth.Tree, 0, len(permissions))
+
 	for _, item := range permissions {
 
 		codes := append(prefix, item.Code)
@@ -144,6 +148,8 @@ func doTrees(permissions []auth.Permission, prefix []string, defaultPlatforms []
 
 func doModules(trees []auth.Tree, platform uint16) (modules []auth.Module) {
 
+	modules = make([]auth.Module, 0, len(trees))
+
 	for _, item := range trees {
 
 		permissions := doList(item.Children, platform)
@@ -164,6 +170,8 @@ func doModules(trees []auth.Tree, platform uint16) (modules []auth.Module) {
 }
 
 func doList(permissions []auth.Tree, platform uint16) (list []string) {
+
+	list = make([]string, 0, len(permissions))
 
 	for _, item := range permissions {
 

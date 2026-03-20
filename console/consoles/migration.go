@@ -8,7 +8,7 @@ import (
 
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/console"
-	"github.com/herhe-com/framework/database/database"
+	"github.com/herhe-com/framework/database/orm"
 	"github.com/herhe-com/framework/facades"
 	"github.com/pressly/goose/v3"
 	"github.com/pterm/pterm"
@@ -91,9 +91,9 @@ func (that *MigrationProvider) Register() console.Console {
 
 func (that *MigrationProvider) init() {
 
-	defaultDriver := facades.Cfg.GetString("database.driver", database.DriverMySQL)
+	defaultDriver := facades.Cfg.GetString("database.driver", orm.DriverMySQL)
 
-	table := facades.Cfg.GetString("database."+defaultDriver+".prefix") + facades.Cfg.GetString("database.migration.table")
+	table := facades.Cfg.GetString("database."+defaultDriver+".prefix") + facades.Cfg.GetString("database.migration.table", "sys_migration")
 
 	goose.SetTableName(table)
 
@@ -375,5 +375,5 @@ func (that *MigrationProvider) version(cmd *cobra.Command, args []string) {
 }
 
 func (that *MigrationProvider) dir() string {
-	return facades.Root + facades.Cfg.GetString("database.migration.dir")
+	return facades.Root + facades.Cfg.GetString("database.migration.dir", "/migration")
 }

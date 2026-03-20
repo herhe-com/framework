@@ -43,7 +43,7 @@ func (receiver Client) Document(index, id string) (document map[string]any, err 
 		return nil, err
 	}
 
-	return nil, nil
+	return document, nil
 }
 
 func (receiver Client) Delete(index, id string) error {
@@ -70,7 +70,7 @@ func (receiver Client) Search(index, query string, request search.Request) (resu
 	}
 
 	result = &search.Paginate{
-		Page:  (request.Limit + request.Offset) / request.Limit,
+		Page:  request.Offset/request.Limit + 1,
 		Size:  request.Limit,
 		Total: resp.TotalHits,
 		Data:  make([]map[string]any, 0),
@@ -80,7 +80,7 @@ func (receiver Client) Search(index, query string, request search.Request) (resu
 
 		var data map[string]any
 
-		if err = item.DecodeInto(&data); err != nil {
+		if err = item.DecodeInto(&data); err == nil {
 			result.Data = append(result.Data, data)
 		}
 	}

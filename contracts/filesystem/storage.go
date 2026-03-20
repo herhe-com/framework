@@ -7,7 +7,7 @@ import (
 
 type Storage interface {
 	Driver
-	Disk(disk string) Driver
+	Disk(driver string, disk string) (Driver, error)
 }
 
 type Driver interface {
@@ -27,6 +27,7 @@ type Driver interface {
 	PutFileAs(path string, source File, name string) (string, error)
 	Size(file string) (int64, error)
 	TemporaryUrl(file string, time time.Duration) (string, error)
+	PresignedUploadUrl(file string, time time.Duration) (string, error)
 	Url(file string) string
 }
 
