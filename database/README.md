@@ -101,6 +101,7 @@ cacheRedis, err := facades.Redis.Channel("cache")
 
 - 注意：当前实现读取的是 `database.redis.connections.<name>.db`，不是 `database.redis.connections.<name>.database`。如果配置写成 `database`，会落到默认 DB `1`。
 - `database.orm.default` 只保存默认 ORM 连接名，实际连接配置位于 `database.orm.connections.<name>`。
+- `database.orm.migration.table` 和 `database.orm.migration.dir` 保存迁移命名空间配置。
 - `database.orm.connections.<name>.prefix` 里的 `prefix` 按连接名读取，例如 `database.orm.connections.default.prefix`，`auth` 和 migration 都会复用这个值。
 - `database.redis.default` 只保存默认 Redis 连接名，实际连接配置位于 `database.redis.connections.<name>`。
 

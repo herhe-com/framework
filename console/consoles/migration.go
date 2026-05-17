@@ -123,7 +123,7 @@ func (that *MigrationProvider) prepare(cmd *cobra.Command) bool {
 	}
 
 	tablePrefix := orm.ConnectionPrefix(connectionName)
-	table := tablePrefix + facades.Cfg.GetString("database.migration.table", "sys_migration")
+	table := tablePrefix + orm.MigrationTableName()
 
 	goose.SetTableName(table)
 	_ = goose.SetDialect(driver)
@@ -430,5 +430,5 @@ func (that *MigrationProvider) version(cmd *cobra.Command, args []string) {
 }
 
 func (that *MigrationProvider) dir() string {
-	return facades.Root + facades.Cfg.GetString("database.migration.dir", "/migration")
+	return facades.Root + orm.MigrationDir()
 }

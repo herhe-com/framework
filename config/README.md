@@ -172,6 +172,7 @@ search:
 - `kernel.providers` 和 `kernel.consoles` 当前必须由 Go 代码写入接口实例，不能只写 YAML 字符串。
 - Redis DB 编号的 key 是 `database.redis.connections.<name>.db`，不是 `database.redis.connections.<name>.database`。
 - `database.orm.default` 保存默认 ORM 连接名，实际 ORM 配置放在 `database.orm.connections.<name>`。
+- `database.orm.migration.table` 和 `database.orm.migration.dir` 保存迁移命名空间配置。
 - `database.orm.connections.<name>.driver`、`database.redis.connections.<name>.db`、`filesystem.disks.<disk>.driver`、`queue.connections.<name>.driver`、`search.connections.<name>.driver` 是当前约定的实例级配置字段。
 - `database.redis.default`、`database.mongo.default`、`filesystem.default`、`queue.default`、`search.default` 只保存默认实例名。
 - ORM 的 `prefix` 也按连接名读取，例如 `database.orm.connections.default.prefix`，`auth` 和 migration 都会使用这个值。
