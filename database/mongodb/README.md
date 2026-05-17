@@ -11,27 +11,29 @@ MongoDB 驱动已经包含在项目依赖中。
 在配置文件中添加 MongoDB 配置：
 
 ```yaml
-mongodb:
-  default:
-    driver: mongodb
-    # 方式1: 使用连接 URI（推荐）
-    uri: "mongodb://username:password@localhost:27017/mydb?authSource=admin"
-    
-    # 方式2: 使用独立参数
-    host: "localhost"
-    port: "27017"           # 默认: 27017
-    username: "admin"
-    password: "password"
-    db: "mydb"
-    auth_source: "admin"    # 默认: admin
-    timeout: 10             # 连接超时（秒），默认: 10
-  
-  # 额外的连接配置
-  analytics:
-    driver: mongodb
-    host: "localhost"
-    port: "27017"
-    db: "analytics"
+database:
+  mongo:
+    default: default
+    connections:
+      default:
+        driver: mongodb
+        # 方式1: 使用连接 URI（推荐）
+        uri: "mongodb://username:password@localhost:27017/mydb?authSource=admin"
+
+        # 方式2: 使用独立参数
+        host: "localhost"
+        port: "27017"           # 默认: 27017
+        username: "admin"
+        password: "password"
+        db: "mydb"
+        auth_source: "admin"    # 默认: admin
+        timeout: 10             # 连接超时（秒），默认: 10
+
+      analytics:
+        driver: mongodb
+        host: "localhost"
+        port: "27017"
+        db: "analytics"
 ```
 
 ## 注册服务提供者
@@ -61,7 +63,7 @@ import (
     "go.mongodb.org/mongo-driver/bson"
 )
 
-// 获取默认 MongoDB 客户端
+// 获取默认 Mongo 客户端
 client := facades.Mongo.Default()
 
 // 获取数据库和集合
@@ -94,7 +96,7 @@ _, err = collection.DeleteOne(ctx, bson.M{"email": "john@example.com"})
 ### 使用多个连接
 
 ```go
-// 获取指定的 MongoDB 连接
+// 获取指定的 Mongo 连接
 analyticsClient, err := facades.Mongo.Driver("analytics")
 if err != nil {
     return err

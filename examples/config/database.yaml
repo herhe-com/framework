@@ -60,14 +60,26 @@ database:
         password: ""
         db: 1
 
-mongodb:
-  default:
-    driver: mongodb
-    uri: ""
-    username: ""
-    password: ""
-    host: 127.0.0.1
-    port: "27017"
-    db: upper
-    auth_source: admin
-    timeout: 10
+    mongo:
+      default: default
+      connections:
+        default:
+          driver: mongodb
+          uri: ""
+          username: ""
+          password: ""
+          host: 127.0.0.1
+          port: "27017"
+          db: upper
+          auth_source: admin
+          timeout: 10
+        analytics:
+          driver: mongodb
+          uri: ""
+          username: ""
+          password: ""
+          host: 127.0.0.1
+          port: "27017"
+          db: analytics
+          auth_source: admin
+          timeout: 10

@@ -25,7 +25,7 @@
 1. 只复制你需要的段落到项目自己的 `conf/env.yaml`。
 2. 如果想先从单文件起步，直接复制 `env.example.yaml`。
 3. 需要 Go 类型的配置，按 `kernel.md` 里的方式在代码里写入 `facades.Cfg`。
-4. `database.orm.default` 只保存默认连接名；真正的 ORM 配置要放在 `database.orm.connections.<name>`，其中 `driver` 和 `prefix` 都按连接名读取。Redis、文件系统、队列和搜索也分别使用 `database.redis.default` / `database.redis.connections.<name>.db`、`filesystem.default` / `filesystem.disks.<disk>.driver`、`queue.default` / `queue.connections.<name>.driver`、`search.default` / `search.connections.<name>.driver` 这类默认选择名 + 实例级字段。
+4. `database.orm.default` 只保存默认连接名；真正的 ORM 配置要放在 `database.orm.connections.<name>`，其中 `driver` 和 `prefix` 都按连接名读取。Redis、Mongo、文件系统、队列和搜索也分别使用 `database.redis.default` / `database.redis.connections.<name>.db`、`database.mongo.default` / `database.mongo.connections.<name>`、`filesystem.default` / `filesystem.disks.<disk>.driver`、`queue.default` / `queue.connections.<name>.driver`、`search.default` / `search.connections.<name>.driver` 这类默认选择名 + 实例级字段。
 
 ## 注意
 
