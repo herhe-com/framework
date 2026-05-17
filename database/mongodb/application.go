@@ -37,6 +37,10 @@ func NewApplication() (*MongoDB, error) {
 func NewClient(name string) (*mongo.Client, string, error) {
 	var uri, username, password, host, port, db, authSource string
 
+	if configDriver := facades.Cfg.GetString("mongodb."+name+".driver", "mongodb"); configDriver != "mongodb" {
+		return nil, "", fmt.Errorf("invalid mongodb config: driver %s", configDriver)
+	}
+
 	uri = facades.Cfg.GetString("mongodb." + name + ".uri")
 
 	if uri == "" {
