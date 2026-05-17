@@ -76,7 +76,7 @@ func (a *Application) RegisterServiceProviders(providers []service.Provider) {
 	for _, provider := range providers {
 		if err := provider.Register(); err != nil {
 			color.Errorf("register service provider error: %v", err)
-			os.Exit(0)
+			os.Exit(1)
 		}
 	}
 }
@@ -86,7 +86,7 @@ func (a *Application) BootServiceProviders(providers []service.Provider) {
 	for _, provider := range providers {
 		if err := provider.Boot(); err != nil {
 			color.Errorf("boot service provider error: %v", err)
-			os.Exit(0)
+			os.Exit(1)
 		}
 	}
 }

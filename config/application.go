@@ -210,5 +210,5 @@ func (app *Application) GetBool(key string, defaultValue ...bool) bool {
 }
 
 func (app *Application) IsSet(key string) bool {
-	return app.IsSet(key)
+	return app.vip.IsSet(key)
 }
