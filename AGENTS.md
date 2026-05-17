@@ -6,7 +6,7 @@ This document provides essential information for AI coding agents working on the
 
 This is a Go framework built on top of Cloudwego Hertz (HTTP) and Kitex (RPC), providing modular components for web applications including authentication, filesystem storage, database access, validation, search, queuing, and more.
 
-**Go Version:** 1.24.9  
+**Go Version:** 1.25.7  
 **Primary Dependencies:** Cloudwego Hertz, Kitex, GORM, Casbin, AWS SDK v2, Viper
 
 ## Build, Test & Lint Commands
