@@ -1,9 +1,10 @@
 # filesystem 配置
 
 filesystem:
-  driver: s3
+  default: default
   disks:
     default:
+      driver: s3
       access: ""
       secret: ""
       region: us-east-1
@@ -11,6 +12,7 @@ filesystem:
       domain: ""
       endpoint: ""
     public:
+      driver: s3
       access: ""
       secret: ""
       region: us-east-1
