@@ -7,6 +7,7 @@ import (
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/facades"
+	filesystemconfig "github.com/herhe-com/framework/filesystem/config"
 	"github.com/herhe-com/framework/filesystem/cos"
 	"github.com/herhe-com/framework/filesystem/minio"
 	"github.com/herhe-com/framework/filesystem/oss"
@@ -28,15 +29,15 @@ type Storage struct {
 }
 
 func NewStorage() *Storage {
-
-	defaultDriver := facades.Cfg.GetString("filesystem.driver")
+	defaultDisk := DefaultDisk()
+	defaultDriver := filesystemconfig.Driver(defaultDisk, facades.Cfg.GetString("filesystem.driver"))
 
 	if defaultDriver == "" {
 		color.Redln("[filesystem] please set default driver")
 		return nil
 	}
 
-	driver, err := NewDriver(defaultDriver, "default")
+	driver, err := NewDriver(defaultDriver, defaultDisk)
 
 	if err != nil {
 		color.Redf("[filesystem] %s\n", err)
@@ -44,8 +45,7 @@ func NewStorage() *Storage {
 	}
 
 	drivers := make(map[string]filesystem.Driver)
-	key := fmt.Sprintf("%s_%s", defaultDriver, "default")
-	drivers[key] = driver
+	drivers[defaultDisk] = driver
 
 	return &Storage{
 		drivers: drivers,
@@ -53,11 +53,19 @@ func NewStorage() *Storage {
 	}
 }
 
+// DefaultDisk returns the configured default filesystem disk name.
+func DefaultDisk() string {
+	return filesystemconfig.DefaultDisk()
+}
+
 func NewDriver(driver string, disk string) (filesystem.Driver, error) {
 
 	ctx := context.Background()
 	configKey := fmt.Sprintf("filesystem.disks.%s", disk)
 	cfg, _ := facades.Cfg.Get(configKey).(map[string]any)
+	if cfgDriver, ok := cfg["driver"].(string); ok && cfgDriver != "" {
+		driver = cfgDriver
+	}
 
 	switch driver {
 	case DriverOss:
@@ -77,7 +85,7 @@ func NewDriver(driver string, disk string) (filesystem.Driver, error) {
 
 func (r *Storage) Disk(driver string, disk string) (filesystem.Driver, error) {
 
-	key := fmt.Sprintf("%s_%s", driver, disk)
+	key := disk
 
 	if dri, exist := r.drivers[key]; exist {
 		return dri, nil
