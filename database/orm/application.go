@@ -26,10 +26,10 @@ type Database struct {
 }
 
 func NewApplication() (*Database, error) {
+	defaultName := DefaultName()
+	defaultDriver := resolveDatabaseDriver("", defaultName)
 
-	defaultDriver := facades.Cfg.GetString("database.driver", DriverMySQL)
-
-	driver, name, err := NewDriver(defaultDriver, "default")
+	driver, name, err := NewDriver("", defaultName)
 
 	if err != nil {
 		color.Errorf("[database] %s", err)
@@ -45,7 +45,18 @@ func NewApplication() (*Database, error) {
 	}, nil
 }
 
+// DefaultName returns the configured default ORM connection name.
+func DefaultName() string {
+	return defaultDatabaseName()
+}
+
+// DefaultDriver returns the configured default ORM connection driver.
+func DefaultDriver() string {
+	return DriverOf(DefaultName())
+}
+
 func NewDriver(driver string, name string) (*gorm.DB, string, error) {
+	driver = resolveDatabaseDriver(driver, name)
 
 	switch driver {
 	case DriverMySQL:
@@ -59,18 +70,83 @@ func NewDriver(driver string, name string) (*gorm.DB, string, error) {
 	return nil, "", fmt.Errorf("invalid driver: %s", driver)
 }
 
+func defaultDatabaseName() string {
+	return facades.Cfg.GetString("database.orm.default", "default")
+}
+
+// DriverOf returns the driver configured for the given ORM connection name.
+func DriverOf(name string) string {
+	if driver := ormConnectionString(name, "driver", ""); driver != "" {
+		return driver
+	}
+
+	if name == DefaultName() {
+		return facades.Cfg.GetString("database.driver")
+	}
+
+	return ""
+}
+
+func ConnectionPrefix(name string) string {
+	return ormConnectionString(name, "prefix", "")
+}
+
+func resolveDatabaseDriver(driver, name string) string {
+	if driver != "" {
+		return driver
+	}
+
+	if value := DriverOf(name); value != "" {
+		return value
+	}
+
+	if name == DefaultName() {
+		for _, candidate := range []string{DriverMySQL, DriverPostgreSQL, DriverSQLite} {
+			if facades.Cfg.GetString("database."+candidate+".default.driver") != "" {
+				return candidate
+			}
+		}
+	}
+
+	return driver
+}
+
+func ormConnectionKey(name, field string) string {
+	return "database.orm.connections." + name + "." + field
+}
+
+func legacyORMConnectionKey(name, field string) string {
+	return "database.orm." + name + "." + field
+}
+
+func ormConnectionString(name, field, defaultValue string) string {
+	if value := facades.Cfg.GetString(ormConnectionKey(name, field)); value != "" {
+		return value
+	}
+
+	if value := facades.Cfg.GetString(legacyORMConnectionKey(name, field)); value != "" {
+		return value
+	}
+
+	return defaultValue
+}
+
 func newMysqlClient(name string) (*gorm.DB, string, error) {
 
 	var username, password, host, port, prefix, db, charset string
 
-	username = facades.Cfg.GetString("database.mysql." + name + ".username")
-	password = facades.Cfg.GetString("database.mysql." + name + ".password")
-	host = facades.Cfg.GetString("database.mysql." + name + ".host")
-	port = facades.Cfg.GetString("database.mysql."+name+".port", "3306")
-	prefix = facades.Cfg.GetString("database.mysql."+name+".prefix", "")
-	db = facades.Cfg.GetString("database.mysql." + name + ".db")
-	charset = facades.Cfg.GetString("database.mysql."+name+".charset", "utf8mb4_unicode_ci")
-	log := facades.Cfg.GetString("database.mysql."+name+".log_mode", "error")
+	if configDriver := DriverOf(name); configDriver != "" && configDriver != DriverMySQL {
+		return nil, "", fmt.Errorf("invalid database config: mysql driver %s", configDriver)
+	}
+
+	username = ormConnectionString(name, "username", "")
+	password = ormConnectionString(name, "password", "")
+	host = ormConnectionString(name, "host", "")
+	port = ormConnectionString(name, "port", "3306")
+	prefix = ormConnectionString(name, "prefix", "")
+	db = ormConnectionString(name, "db", "")
+	charset = ormConnectionString(name, "charset", "utf8mb4_unicode_ci")
+	log := ormConnectionString(name, "log_mode", "error")
 
 	if username == "" || password == "" || host == "" || db == "" {
 		return nil, "", errors.New("invalid database config: mysql")
@@ -93,7 +169,7 @@ func newMysqlClient(name string) (*gorm.DB, string, error) {
 
 	config := gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
-			TablePrefix: facades.Cfg.GetString(prefix),
+			TablePrefix: prefix,
 		},
 		Logger:                 logger.Default.LogMode(logMode),
 		SkipDefaultTransaction: true,
@@ -114,8 +190,11 @@ func newMysqlClient(name string) (*gorm.DB, string, error) {
 }
 
 func newSQLiteClient(name string) (*gorm.DB, string, error) {
+	if configDriver := DriverOf(name); configDriver != "" && configDriver != DriverSQLite {
+		return nil, "", fmt.Errorf("invalid database config: sqlite driver %s", configDriver)
+	}
 
-	db := facades.Cfg.GetString("database.sqlite."+name, "default.db")
+	db := ormConnectionString(name, "path", facades.Cfg.GetString("database.sqlite."+name, "default.db"))
 
 	path := facades.Root + db
 
@@ -151,15 +230,19 @@ func newPostgreSQLClient(name string) (*gorm.DB, string, error) {
 
 	var username, password, host, port, prefix, db, sslmode, timezone string
 
-	username = facades.Cfg.GetString("database.postgresql." + name + ".username")
-	password = facades.Cfg.GetString("database.postgresql." + name + ".password")
-	host = facades.Cfg.GetString("database.postgresql." + name + ".host")
-	port = facades.Cfg.GetString("database.postgresql."+name+".port", "5432")
-	prefix = facades.Cfg.GetString("database.postgresql."+name+".prefix", "")
-	db = facades.Cfg.GetString("database.postgresql." + name + ".db")
-	sslmode = facades.Cfg.GetString("database.postgresql."+name+".sslmode", "disable")
-	timezone = facades.Cfg.GetString("database.postgresql."+name+".timezone", "Asia/Shanghai")
-	log := facades.Cfg.GetString("database.postgresql."+name+".log_mode", "error")
+	if configDriver := DriverOf(name); configDriver != "" && configDriver != DriverPostgreSQL {
+		return nil, "", fmt.Errorf("invalid database config: postgresql driver %s", configDriver)
+	}
+
+	username = ormConnectionString(name, "username", "")
+	password = ormConnectionString(name, "password", "")
+	host = ormConnectionString(name, "host", "")
+	port = ormConnectionString(name, "port", "5432")
+	prefix = ormConnectionString(name, "prefix", "")
+	db = ormConnectionString(name, "db", "")
+	sslmode = ormConnectionString(name, "sslmode", "disable")
+	timezone = ormConnectionString(name, "timezone", "Asia/Shanghai")
+	log := ormConnectionString(name, "log_mode", "error")
 
 	if username == "" || password == "" || host == "" || db == "" {
 		return nil, "", errors.New("invalid database config: postgresql")
@@ -182,7 +265,7 @@ func newPostgreSQLClient(name string) (*gorm.DB, string, error) {
 
 	config := gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
-			TablePrefix: facades.Cfg.GetString(prefix),
+			TablePrefix: prefix,
 		},
 		Logger:                 logger.Default.LogMode(logMode),
 		SkipDefaultTransaction: true,
