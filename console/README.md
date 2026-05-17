@@ -78,6 +78,10 @@ func (*HelloProvider) Register() console.Console {
 }
 ```
 
+## Migration 命令
+
+`consoles.MigrationProvider` 会从 `database.orm.default` 读取默认 ORM 连接名，也支持在命令行里通过 `--database` / `-d` 指定其他连接名。它会按连接名读取 `database.orm.connections.<name>.prefix` 作为迁移表前缀。
+
 ## Server 命令
 
 `consoles.ServerProvider` 会读取以下配置启动 Hertz：

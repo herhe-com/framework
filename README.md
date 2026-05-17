@@ -56,8 +56,8 @@ cfg.Add("kernel", map[string]any{
 1. Provider 装配依赖 Go 代码注入接口实例，文档中“YAML 配置包路径即可注册”的写法不符合当前实现。
 2. 框架大量依赖全局 facade，业务层调用很方便，但单元测试需要额外隔离全局状态。
 3. 启动失败会直接 `os.Exit(1)`，适合 CLI/服务入口，但不利于库式复用；更理想的方向是让启动链路返回 error。
-4. 配置 key 必须和框架实现完全一致，例如 Redis 使用 `database.redis.default.db`，文件系统使用 `filesystem.disks.default`。
-5. 队列配置要求 `queue.rabbitmq.default`，example 基础项目如果少了 `default` 层，启用 `queue.ServiceProvider` 时会初始化失败。
+4. 配置 key 必须和框架实现完全一致，例如 ORM 使用 `database.orm.default` 选择默认连接名、`database.orm.connections.default.driver` 定义默认连接驱动、`database.orm.connections.default.prefix` 定义默认前缀，Redis 使用 `database.redis.default` 选择默认连接名、`database.redis.connections.default.db` 定义默认 DB，文件系统使用 `filesystem.default` 选择默认磁盘名。
+5. 队列和搜索配置使用 `queue.default`、`search.default` 选择默认连接名，再用 `queue.connections.default.driver`、`search.connections.default.driver` 这类实例级驱动字段定义具体连接；example 基础项目如果少了 `default` 层，启用对应 `ServiceProvider` 时会初始化失败。
 6. 当前框架测试覆盖仍然偏少，核心配置、启动、驱动分发、权限和中间件都应补回归测试。
 
 ## 验证

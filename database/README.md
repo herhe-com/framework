@@ -14,30 +14,43 @@
 
 ```yaml
 database:
-  driver: mysql
-  mysql:
-    default:
-      username: root
-      password: ""
-      host: 127.0.0.1
-      port: "3306"
-      db: upper
-      charset: utf8mb4_unicode_ci
-      prefix: ""
-      log_mode: error
-  postgresql:
-    default:
-      username: postgres
-      password: ""
-      host: 127.0.0.1
-      port: "5432"
-      db: upper
-      sslmode: disable
-      timezone: Asia/Shanghai
-      prefix: ""
-      log_mode: error
-  sqlite:
-    default: /database/default.db
+  orm:
+    default: default
+    connections:
+      default:
+        driver: mysql
+        username: root
+        password: ""
+        host: 127.0.0.1
+        port: "3306"
+        db: upper
+        charset: utf8mb4_unicode_ci
+        prefix: ""
+        log_mode: error
+      report:
+        driver: mysql
+        username: root
+        password: ""
+        host: 127.0.0.1
+        port: "3306"
+        db: upper_report
+        charset: utf8mb4_unicode_ci
+        prefix: rpt_
+        log_mode: error
+      postgres:
+        driver: postgresql
+        username: postgres
+        password: ""
+        host: 127.0.0.1
+        port: "5432"
+        db: upper
+        sslmode: disable
+        timezone: Asia/Shanghai
+        prefix: ""
+        log_mode: error
+      sqlite:
+        driver: sqlite
+        path: /database/default.db
 ```
 
 使用：
@@ -54,21 +67,25 @@ postgresDefault, err := facades.DB.Drivers("postgresql")
 
 ## Redis
 
-Redis 配置位于 `database.redis` 下：
+Redis 配置位于 `database.redis` 下，`database.redis.default` 只保存默认连接名，实际配置位于 `database.redis.connections.<name>`：
 
 ```yaml
 database:
   redis:
-    default:
-      host: 127.0.0.1
-      port: "6379"
-      username: ""
-      password: ""
-      db: 0
-    cache:
-      host: 127.0.0.1
-      port: "6379"
-      db: 1
+    default: default
+    connections:
+      default:
+        driver: redis
+        host: 127.0.0.1
+        port: "6379"
+        username: ""
+        password: ""
+        db: 0
+      cache:
+        driver: redis
+        host: 127.0.0.1
+        port: "6379"
+        db: 1
 ```
 
 使用：
@@ -82,7 +99,10 @@ redis.Set(ctx, "key", "value", 0)
 cacheRedis, err := facades.Redis.Channel("cache")
 ```
 
-注意：当前实现读取的是 `database.redis.<name>.db`，不是 `database.redis.<name>.database`。如果配置写成 `database`，会落到默认 DB `1`。
+- 注意：当前实现读取的是 `database.redis.connections.<name>.db`，不是 `database.redis.connections.<name>.database`。如果配置写成 `database`，会落到默认 DB `1`。
+- `database.orm.default` 只保存默认 ORM 连接名，实际连接配置位于 `database.orm.connections.<name>`。
+- `database.orm.connections.<name>.prefix` 里的 `prefix` 按连接名读取，例如 `database.orm.connections.default.prefix`，`auth` 和 migration 都会复用这个值。
+- `database.redis.default` 只保存默认 Redis 连接名，实际连接配置位于 `database.redis.connections.<name>`。
 
 ## Provider
 

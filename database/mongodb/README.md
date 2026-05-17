@@ -13,6 +13,7 @@ MongoDB 驱动已经包含在项目依赖中。
 ```yaml
 mongodb:
   default:
+    driver: mongodb
     # 方式1: 使用连接 URI（推荐）
     uri: "mongodb://username:password@localhost:27017/mydb?authSource=admin"
     
@@ -27,6 +28,7 @@ mongodb:
   
   # 额外的连接配置
   analytics:
+    driver: mongodb
     host: "localhost"
     port: "27017"
     db: "analytics"

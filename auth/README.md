@@ -17,6 +17,7 @@ jwt:
 auth:
   casbin:
     table: sys_casbin
+    database: default
   platforms:
     - 400
 ```
@@ -97,6 +98,7 @@ ok := auth.CheckPassword("secret", hash)
 
 - `facades.DB` 已初始化。
 - `auth.casbin.table` 已配置。
+- `auth.casbin.database` 已配置，默认读取 `database.orm.default` 指向的 ORM 连接名。
 - `facades.Root + "/conf/casbin.conf"` 文件存在。
 
 常用方法：

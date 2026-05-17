@@ -9,6 +9,7 @@ jwt:
 auth:
   casbin:
     table: sys_casbin
+    database: default
   platforms:
     - 400
   login:
