@@ -19,21 +19,24 @@
 
 ## 配置
 
+`search` 使用 `search.default` 选择默认连接名，并使用 `connections.<name>.driver` 作为实例级驱动字段。
+
 ```yaml
 search:
-  driver: elasticsearch
-  
-  elasticsearch:
+  default: default
+  connections:
     default:
-      addresses:
+      driver: elasticsearch
+      hosts:
         - http://localhost:9200
       username: elastic
       password: changeme
-  
-  meilisearch:
-    default:
+      prefix: example_
+    meilisearch:
+      driver: meilisearch
       host: http://localhost:7700
-      api_key: masterKey
+      secret: masterKey
+      prefix: example_
 ```
 
 ## 使用方法

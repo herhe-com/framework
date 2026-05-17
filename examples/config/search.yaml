@@ -1,17 +1,18 @@
 # search 配置
 
 search:
-  driver: elasticsearch
-  elasticsearch:
+  default: default
+  connections:
     default:
+      driver: elasticsearch
       host: http://127.0.0.1:9200
       hosts:
         - http://127.0.0.1:9200
       username: elastic
       password: changeme
       prefix: example_
-  meilisearch:
-    default:
+    meilisearch:
+      driver: meilisearch
       host: http://127.0.0.1:7700
       secret: masterKey
       prefix: example_
