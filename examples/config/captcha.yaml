@@ -1,0 +1,13 @@
+# captcha 配置
+
+captcha:
+  click:
+    min: 4
+    max: 4
+    width: 300
+    height: 220
+    char: ""
+    padding: 5
+  resources:
+    bg: /resources/bg
+    font: /resources/font

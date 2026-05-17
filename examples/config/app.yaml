@@ -1,0 +1,9 @@
+# app 基础配置
+
+app:
+  name: example
+  version: 1.0.0
+  location: Asia/Shanghai
+  language: zh
+  debug: false
+  node: 1

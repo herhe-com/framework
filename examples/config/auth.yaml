@@ -1,0 +1,40 @@
+# auth 配置
+
+jwt:
+  secret: ""
+  sub: default
+  lifetime: 720
+  leeway: 3
+
+auth:
+  casbin:
+    table: sys_casbin
+  platforms:
+    - 400
+  login:
+    max_attempts: 5
+    lock_duration: 15
+    show_attempts: false
+    identifier_field: username
+    lock_message: Account is locked. Please try again in %d minutes.
+    attempts_message: "%s (Failed %d times, %d attempts remaining before account lock)"
+  callback:
+    jwt: null
+    refresh: null
+  permissions:
+    - code: user
+      name: 用户管理
+      common: true
+      platforms:
+        - 400
+      children:
+        - code: list
+          name: 用户列表
+          common: true
+          platforms:
+            - 400
+        - code: detail
+          name: 用户详情
+          common: true
+          platforms:
+            - 400

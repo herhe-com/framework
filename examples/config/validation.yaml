@@ -1,0 +1,15 @@
+# validation 配置
+
+validation:
+  label: label
+  translation:
+    zh:
+      required: "{0}不能为空"
+      email: "{0}格式不正确"
+      min: "{0}长度不能小于 {1}"
+    en:
+      required: "{0} is required"
+      email: "{0} is invalid"
+      min: "{0} must be at least {1}"
+
+# validation.rules 需要通过 Go 代码注入 []validation.Rule

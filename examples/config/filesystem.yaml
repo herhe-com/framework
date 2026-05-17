@@ -1,0 +1,19 @@
+# filesystem 配置
+
+filesystem:
+  driver: s3
+  disks:
+    default:
+      access: ""
+      secret: ""
+      region: us-east-1
+      bucket: ""
+      domain: ""
+      endpoint: ""
+    public:
+      access: ""
+      secret: ""
+      region: us-east-1
+      bucket: public-bucket
+      domain: https://static.example.com
+      endpoint: ""

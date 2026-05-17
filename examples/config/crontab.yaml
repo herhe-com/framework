@@ -1,0 +1,6 @@
+# crontab 配置
+
+crontab:
+  functions: []
+
+# 实际任务函数需要通过 Go 代码注入，因为任务条目里包含函数指针。

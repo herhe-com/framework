@@ -1,0 +1,4 @@
+# microservice 配置
+
+snowflake:
+  node: 1

@@ -1,0 +1,67 @@
+# database / redis / mongodb 配置
+
+database:
+  driver: mysql
+  migration:
+    table: sys_migration
+    dir: /migration
+
+  mysql:
+    default:
+      username: root
+      password: ""
+      host: 127.0.0.1
+      port: "3306"
+      db: upper
+      charset: utf8mb4_unicode_ci
+      prefix: ""
+      log_mode: error
+    report:
+      username: root
+      password: ""
+      host: 127.0.0.1
+      port: "3306"
+      db: upper_report
+      charset: utf8mb4_unicode_ci
+      prefix: rpt_
+      log_mode: error
+
+  postgresql:
+    default:
+      username: postgres
+      password: ""
+      host: 127.0.0.1
+      port: "5432"
+      db: upper
+      sslmode: disable
+      timezone: Asia/Shanghai
+      prefix: ""
+      log_mode: error
+
+  sqlite:
+    default: /database/default.db
+
+  redis:
+    default:
+      host: 127.0.0.1
+      port: "6379"
+      username: ""
+      password: ""
+      db: 0
+    cache:
+      host: 127.0.0.1
+      port: "6379"
+      username: ""
+      password: ""
+      db: 1
+
+mongodb:
+  default:
+    uri: ""
+    username: ""
+    password: ""
+    host: 127.0.0.1
+    port: "27017"
+    db: upper
+    auth_source: admin
+    timeout: 10
