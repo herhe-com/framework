@@ -15,9 +15,8 @@ func NewApplication() error {
 		return errors.New("请先初始化数据库")
 	}
 
-	defaultDriver := facades.Cfg.GetString("database.driver", orm.DriverMySQL)
-
-	prefix := facades.Cfg.GetString("database." + defaultDriver + ".prefix")
+	connectionName := facades.Cfg.GetString("auth.casbin.database", orm.DefaultName())
+	prefix := orm.ConnectionPrefix(connectionName)
 	table := facades.Cfg.GetString("auth.casbin.table")
 
 	a, err := adapter.NewAdapterByDBUseTableName(facades.DB.Default(), prefix, table)
