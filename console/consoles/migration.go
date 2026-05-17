@@ -31,7 +31,13 @@ func (that *MigrationProvider) Register() console.Console {
 		return migrate
 	}
 
-	that.init()
+	migrate.Tags = func(cmd *cobra.Command) {
+		cmd.PersistentFlags().StringP("database", "d", "", "数据库连接名")
+	}
+
+	if !that.prepare(nil) {
+		return migrate
+	}
 
 	var err error
 
@@ -89,18 +95,47 @@ func (that *MigrationProvider) Register() console.Console {
 	return migrate
 }
 
-func (that *MigrationProvider) init() {
+func (that *MigrationProvider) prepare(cmd *cobra.Command) bool {
+	connectionName := orm.DefaultName()
 
-	defaultDriver := facades.Cfg.GetString("database.driver", orm.DriverMySQL)
+	if cmd != nil {
+		if value, err := cmd.Flags().GetString("database"); err == nil && value != "" {
+			connectionName = value
+		}
+	}
 
-	table := facades.Cfg.GetString("database."+defaultDriver+".prefix") + facades.Cfg.GetString("database.migration.table", "sys_migration")
+	driver := orm.DriverOf(connectionName)
+	if driver == "" {
+		color.Errorf("\n\n数据库驱动未配置：%s\n\n", connectionName)
+		return false
+	}
+
+	db, err := facades.DB.Drivers(driver, connectionName)
+	if err != nil {
+		color.Errorln("\n\n数据库获取失败：%v\n\n", err)
+		return false
+	}
+
+	that.db, err = db.DB()
+	if err != nil {
+		color.Errorln("\n\n数据库获取失败：%v\n\n", err)
+		return false
+	}
+
+	tablePrefix := orm.ConnectionPrefix(connectionName)
+	table := tablePrefix + facades.Cfg.GetString("database.migration.table", "sys_migration")
 
 	goose.SetTableName(table)
+	_ = goose.SetDialect(driver)
 
-	_ = goose.SetDialect(defaultDriver)
+	return true
 }
 
 func (that *MigrationProvider) make(cmd *cobra.Command, args []string) {
+
+	if !that.prepare(cmd) {
+		return
+	}
 
 	name, _ := cmd.Flags().GetString("name")
 
@@ -142,6 +177,10 @@ func (that *MigrationProvider) make(cmd *cobra.Command, args []string) {
 func (that *MigrationProvider) commit(cmd *cobra.Command, args []string) {
 
 	var err error
+
+	if !that.prepare(cmd) {
+		return
+	}
 
 	one, _ := cmd.Flags().GetBool("one")
 	all, _ := cmd.Flags().GetBool("all")
@@ -247,6 +286,10 @@ func (that *MigrationProvider) commit(cmd *cobra.Command, args []string) {
 func (that *MigrationProvider) rollback(cmd *cobra.Command, args []string) {
 
 	var err error
+
+	if !that.prepare(cmd) {
+		return
+	}
 
 	one, _ := cmd.Flags().GetBool("one")
 	all, _ := cmd.Flags().GetBool("all")
@@ -355,6 +398,10 @@ func (that *MigrationProvider) rollback(cmd *cobra.Command, args []string) {
 
 func (that *MigrationProvider) redo(cmd *cobra.Command, args []string) {
 
+	if !that.prepare(cmd) {
+		return
+	}
+
 	if err := goose.Redo(that.db, that.dir()); err != nil {
 		color.Errorln("\n\n重新运行数据迁移失败：%v\n\n", err)
 	}
@@ -362,12 +409,20 @@ func (that *MigrationProvider) redo(cmd *cobra.Command, args []string) {
 
 func (that *MigrationProvider) status(cmd *cobra.Command, args []string) {
 
+	if !that.prepare(cmd) {
+		return
+	}
+
 	if err := goose.Status(that.db, that.dir()); err != nil {
 		color.Errorln("\n\n查看迁移文件失败：%v\n\n", err)
 	}
 }
 
 func (that *MigrationProvider) version(cmd *cobra.Command, args []string) {
+
+	if !that.prepare(cmd) {
+		return
+	}
 
 	if err := goose.Version(that.db, that.dir()); err != nil {
 		color.Errorln("\n\n查看迁移版本失败：%v\n\n", err)
