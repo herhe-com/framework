@@ -6,7 +6,7 @@ import (
 	"net"
 
 	"github.com/gookit/color"
-	"github.com/herhe-com/framework/facades"
+	redisconfig "github.com/herhe-com/framework/database/redis/config"
 	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/maintnotifications"
 )
@@ -16,9 +16,12 @@ type Redis struct {
 	channels map[string]*redis.Client
 }
 
+const DriverRedis string = "redis"
+
 func NewApplication() (*Redis, error) {
 
-	channel, name, err := newRedisClient("default")
+	defaultName := DefaultName()
+	channel, name, err := newRedisClient(defaultName)
 
 	if err != nil {
 		color.Errorf("[redis] %s", err)
@@ -32,6 +35,11 @@ func NewApplication() (*Redis, error) {
 		channels: channels,
 		channel:  channel,
 	}, nil
+}
+
+// DefaultName returns the configured default redis connection name.
+func DefaultName() string {
+	return redisconfig.DefaultName()
 }
 
 func (r *Redis) Channel(name string) (*redis.Client, error) {
@@ -60,11 +68,15 @@ func newRedisClient(name string) (*redis.Client, string, error) {
 	var db int
 	var username, password, host, port string
 
-	username = facades.Cfg.GetString("database.redis." + name + ".username")
-	password = facades.Cfg.GetString("database.redis." + name + ".password")
-	host = facades.Cfg.GetString("database.redis." + name + ".host")
-	port = facades.Cfg.GetString("database.redis."+name+".port", "6379")
-	db = facades.Cfg.GetInt("database.redis."+name+".db", 1)
+	if configDriver := redisconfig.Driver(name, DriverRedis); configDriver != DriverRedis {
+		return nil, "", errors.New("invalid database config: redis driver")
+	}
+
+	username = redisconfig.ConnectionString(name, "username", "")
+	password = redisconfig.ConnectionString(name, "password", "")
+	host = redisconfig.ConnectionString(name, "host", "")
+	port = redisconfig.ConnectionString(name, "port", "6379")
+	db = redisconfig.ConnectionInt(name, "db", 1)
 
 	if host == "" {
 		return nil, "", errors.New("invalid database config: mysql")
