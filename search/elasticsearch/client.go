@@ -3,6 +3,7 @@ package elasticsearch
 import (
 	elastic "github.com/elastic/go-elasticsearch/v7"
 	"github.com/herhe-com/framework/facades"
+	searchconfig "github.com/herhe-com/framework/search/config"
 )
 
 type Client struct {
@@ -16,13 +17,12 @@ type Client struct {
 }
 
 func NewClient(name string) (*Client, error) {
-
 	client := &Client{
-		prefix:   facades.Cfg.GetString("search.elasticsearch." + name + ".prefix"),
-		host:     facades.Cfg.GetString("search.elasticsearch." + name + ".host"),
-		hosts:    facades.Cfg.GetStrings("search.elasticsearch." + name + ".hosts"),
-		username: facades.Cfg.GetString("search.elasticsearch." + name + ".username"),
-		password: facades.Cfg.GetString("search.elasticsearch." + name + ".password"),
+		prefix:   searchconfig.ConnectionString(name, "prefix", ""),
+		host:     searchconfig.ConnectionString(name, "host", ""),
+		hosts:    searchconfig.ConnectionStrings(name, "hosts", nil),
+		username: searchconfig.ConnectionString(name, "username", ""),
+		password: searchconfig.ConnectionString(name, "password", ""),
 	}
 
 	if err := facades.Validator.Struct(client); err != nil {

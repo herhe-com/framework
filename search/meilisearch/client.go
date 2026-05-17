@@ -2,6 +2,7 @@ package meilisearch
 
 import (
 	"github.com/herhe-com/framework/facades"
+	searchconfig "github.com/herhe-com/framework/search/config"
 	"github.com/meilisearch/meilisearch-go"
 )
 
@@ -14,11 +15,10 @@ type Client struct {
 }
 
 func NewClient(name string) (*Client, error) {
-
 	c := &Client{
-		prefix: facades.Cfg.GetString("search.meilisearch." + name + ".prefix"),
-		host:   facades.Cfg.GetString("search.meilisearch." + name + ".host"),
-		secret: facades.Cfg.GetString("search.meilisearch." + name + ".secret"),
+		prefix: searchconfig.ConnectionString(name, "prefix", ""),
+		host:   searchconfig.ConnectionString(name, "host", ""),
+		secret: searchconfig.ConnectionString(name, "secret", ""),
 	}
 
 	if err := facades.Validator.Struct(c); err != nil {

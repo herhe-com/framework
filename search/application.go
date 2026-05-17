@@ -6,6 +6,7 @@ import (
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/search"
 	"github.com/herhe-com/framework/facades"
+	searchconfig "github.com/herhe-com/framework/search/config"
 	"github.com/herhe-com/framework/search/elasticsearch"
 	"github.com/herhe-com/framework/search/meilisearch"
 )
@@ -16,15 +17,8 @@ type Search struct {
 }
 
 func NewSearch() *Search {
-
-	defaultDriver := facades.Cfg.GetString("search.driver")
-
-	if defaultDriver == "" {
-		color.Errorln("[search] please set default driver")
-		return nil
-	}
-
-	driver, err := NewDriver(defaultDriver, "default")
+	defaultName := DefaultName()
+	driver, err := NewDriver("", defaultName)
 
 	if err != nil {
 		color.Errorf("[search] %s", err)
@@ -32,8 +26,7 @@ func NewSearch() *Search {
 	}
 
 	drivers := make(map[string]search.Driver)
-	key := fmt.Sprintf("%s_%s", defaultDriver, "default")
-	drivers[key] = driver
+	drivers[defaultName] = driver
 
 	return &Search{
 		drivers: drivers,
@@ -41,7 +34,15 @@ func NewSearch() *Search {
 	}
 }
 
+// DefaultName returns the configured default search connection name.
+func DefaultName() string {
+	return facades.Cfg.GetString("search.default", "default")
+}
+
 func NewDriver(driver string, name string) (search.Driver, error) {
+	if driver == "" {
+		driver = searchconfig.Driver(name, "")
+	}
 
 	switch driver {
 	case search.DriverMeiliSearch:
@@ -53,9 +54,19 @@ func NewDriver(driver string, name string) (search.Driver, error) {
 	return nil, fmt.Errorf("invalid driver: %s, only support %s, %s", driver, search.DriverMeiliSearch, search.DriverElasticSearch)
 }
 
+// ConnectionString returns the configured string value for a search connection field.
+func ConnectionString(name, field, defaultValue string) string {
+	return searchconfig.ConnectionString(name, field, defaultValue)
+}
+
+// ConnectionStrings returns the configured string slice value for a search connection field.
+func ConnectionStrings(name, field string, defaultValue []string) []string {
+	return searchconfig.ConnectionStrings(name, field, defaultValue)
+}
+
 func (r *Search) Channel(driver string, name string) (search.Driver, error) {
 
-	key := fmt.Sprintf("%s_%s", driver, name)
+	key := name
 
 	if dri, exist := r.drivers[key]; exist {
 		return dri, nil
