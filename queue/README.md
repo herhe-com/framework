@@ -4,13 +4,14 @@
 
 ## 配置
 
-`queue.ServiceProvider` 会读取 `queue.driver`，并按 `queue.rabbitmq.default` 初始化默认队列驱动：
+`queue.ServiceProvider` 会读取 `queue.default` 选择默认队列连接名，并按 `queue.connections.<name>` 初始化默认队列驱动。每个连接实例都需要自己的 `driver` 字段：
 
 ```yaml
 queue:
-  driver: rabbitmq
-  rabbitmq:
+  default: default
+  connections:
     default:
+      driver: rabbitmq
       host: 127.0.0.1
       port: 5672
       username: guest
@@ -19,7 +20,7 @@ queue:
       error: basic_error
 ```
 
-注意：必须保留 `default` 这一层。example 基础项目如果写成 `queue.rabbitmq.host`，则 `NewDriver("rabbitmq", "default")` 读不到配置。
+注意：必须保留 `connections` 这一层。`queue.default` 只保存连接名，example 基础项目如果写成 `queue.host`，则 `NewDriver("rabbitmq", "default")` 读不到配置。
 
 ## 使用
 
@@ -102,5 +103,5 @@ type Driver interface {
 
 - 当前没有 `queue.WithDelay`、`queue.WithTTL`、`queue.WithRetries` 这类 option API。
 - `Producer` 每次调用会创建 publisher；高频场景需要评估连接和 publisher 生命周期成本。
-- 如果消费失败且超过重试次数，会把错误信息投递到 `rabbitmq.error` 配置的队列，默认 `basic_error`。
+- 如果消费失败且超过重试次数，会把错误信息投递到 `error` 配置的队列，默认 `basic_error`。
 - 如果 example 基础项目没有注册 `queue.ServiceProvider`，队列配置即使存在也不会实际初始化。

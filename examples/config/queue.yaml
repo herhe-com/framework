@@ -1,16 +1,18 @@
 # queue 配置
 
 queue:
-  driver: rabbitmq
-  rabbitmq:
-    error: basic_error
+  default: default
+  connections:
     default:
+      driver: rabbitmq
+      error: basic_error
       host: 127.0.0.1
       port: 5672
       username: guest
       password: guest
       vhost: /
     report:
+      driver: rabbitmq
       host: 127.0.0.1
       port: 5672
       username: guest
