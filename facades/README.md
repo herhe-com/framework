@@ -19,6 +19,7 @@ facades.Register[filesystem.Storage](storage)
 ```go
 cfg := facades.MustGet[config.Application]()
 db, ok := facades.Get[database.DB]()
+redis, ok := facades.Optional[database.Redis]()
 ```
 
 访问器：
@@ -63,6 +64,13 @@ facades.Register(ormDatabase)              // 不推荐，可能注册为 *orm.D
 if redis, ok := facades.OptionalRedis(); ok {
     redis.Default().Del(ctx, key)
 }
+```
+
+测试或重置服务时可以使用：
+
+```go
+facades.Has[database.DB]()
+facades.Unregister[database.DB]()
 ```
 
 ## 初始化顺序

@@ -78,6 +78,17 @@ func Get[T any]() (T, bool) {
 	return typed, true
 }
 
+// Optional returns a service registered by its explicit type.
+func Optional[T any]() (T, bool) {
+	return Get[T]()
+}
+
+// Has reports whether a non-nil service is registered by its explicit type.
+func Has[T any]() bool {
+	_, ok := Get[T]()
+	return ok
+}
+
 // MustGet returns a registered service or panics when it is missing.
 func MustGet[T any]() T {
 	service, ok := Get[T]()
@@ -86,6 +97,18 @@ func MustGet[T any]() T {
 	}
 
 	return service
+}
+
+// Unregister removes a service registered by its explicit type.
+func Unregister[T any]() {
+	services.mu.Lock()
+	defer services.mu.Unlock()
+
+	if services.registry == nil {
+		return
+	}
+
+	delete(services.registry, typeOf[T]())
 }
 
 // Config returns the registered configuration service.

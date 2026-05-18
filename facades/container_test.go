@@ -120,6 +120,64 @@ func TestRegisterNilClearsLegacyFacade(t *testing.T) {
 	}
 }
 
+func TestHasReportsRegisteredService(t *testing.T) {
+	original := Container()
+	SetContainer(&Services{})
+	t.Cleanup(func() {
+		SetContainer(original)
+	})
+
+	cfg := &fakeConfig{values: map[string]any{"app.name": "framework"}}
+	Register[config.Application](cfg)
+
+	if !Has[config.Application]() {
+		t.Fatal("expected registered config service to exist")
+	}
+
+	Register[config.Application](nil)
+
+	if Has[config.Application]() {
+		t.Fatal("expected nil config service to be treated as missing")
+	}
+}
+
+func TestOptionalReturnsRegisteredService(t *testing.T) {
+	original := Container()
+	SetContainer(&Services{})
+	t.Cleanup(func() {
+		SetContainer(original)
+	})
+
+	cfg := &fakeConfig{values: map[string]any{"app.name": "framework"}}
+	Register[config.Application](cfg)
+
+	got, ok := Optional[config.Application]()
+	if !ok {
+		t.Fatal("expected optional config service to be available")
+	}
+
+	if got != cfg {
+		t.Fatal("expected optional config service to match registered service")
+	}
+}
+
+func TestUnregisterRemovesService(t *testing.T) {
+	original := Container()
+	SetContainer(&Services{})
+	t.Cleanup(func() {
+		SetContainer(original)
+	})
+
+	cfg := &fakeConfig{values: map[string]any{"app.name": "framework"}}
+	Register[config.Application](cfg)
+
+	Unregister[config.Application]()
+
+	if Has[config.Application]() {
+		t.Fatal("expected config service to be unregistered")
+	}
+}
+
 func TestRootIsRegisteredByDedicatedType(t *testing.T) {
 	original := Container()
 	SetContainer(&Services{})
