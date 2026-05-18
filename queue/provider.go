@@ -10,7 +10,12 @@ type ServiceProvider struct {
 }
 
 func (that *ServiceProvider) Register() error {
-	facades.Queue = NewQueue()
+	queue, err := NewQueueWithError()
+	if err != nil {
+		return err
+	}
+
+	facades.Queue = queue
 	return nil
 }
 

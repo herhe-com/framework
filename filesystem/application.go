@@ -3,6 +3,7 @@ package filesystem
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/filesystem"
@@ -25,23 +26,33 @@ const (
 
 type Storage struct {
 	filesystem.Driver
+	mu      sync.RWMutex
 	drivers map[string]filesystem.Driver
 }
 
 func NewStorage() *Storage {
+	storage, err := NewStorageWithError()
+	if err != nil {
+		color.Redf("[filesystem] %s\n", err)
+		return nil
+	}
+
+	return storage
+}
+
+// NewStorageWithError creates the filesystem storage application and returns initialization errors.
+func NewStorageWithError() (*Storage, error) {
 	defaultDisk := DefaultDisk()
 	defaultDriver := filesystemconfig.Driver(defaultDisk, facades.Cfg.GetString("filesystem.driver"))
 
 	if defaultDriver == "" {
-		color.Redln("[filesystem] please set default driver")
-		return nil
+		return nil, fmt.Errorf("please set default driver")
 	}
 
 	driver, err := NewDriver(defaultDriver, defaultDisk)
 
 	if err != nil {
-		color.Redf("[filesystem] %s\n", err)
-		return nil
+		return nil, err
 	}
 
 	drivers := make(map[string]filesystem.Driver)
@@ -50,7 +61,7 @@ func NewStorage() *Storage {
 	return &Storage{
 		drivers: drivers,
 		Driver:  driver,
-	}
+	}, nil
 }
 
 // DefaultDisk returns the configured default filesystem disk name.
@@ -86,6 +97,16 @@ func NewDriver(driver string, disk string) (filesystem.Driver, error) {
 func (r *Storage) Disk(driver string, disk string) (filesystem.Driver, error) {
 
 	key := disk
+
+	r.mu.RLock()
+	if dri, exist := r.drivers[key]; exist {
+		r.mu.RUnlock()
+		return dri, nil
+	}
+	r.mu.RUnlock()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	if dri, exist := r.drivers[key]; exist {
 		return dri, nil

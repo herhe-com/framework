@@ -5,6 +5,7 @@ import (
 )
 
 func Errors(err validator.ValidationErrors) (messages map[string][]string) {
+	messages = make(map[string][]string)
 
 	for _, item := range err {
 

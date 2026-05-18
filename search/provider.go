@@ -10,7 +10,12 @@ type ServiceProvider struct {
 }
 
 func (that *ServiceProvider) Register() error {
-	facades.Search = NewSearch()
+	search, err := NewSearchWithError()
+	if err != nil {
+		return err
+	}
+
+	facades.Search = search
 	return nil
 }
 

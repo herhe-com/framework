@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/glebarez/sqlite"
 	"github.com/gookit/color"
@@ -22,6 +23,7 @@ const DriverPostgreSQL string = "postgresql"
 
 type Database struct {
 	driver  *gorm.DB
+	mu      sync.RWMutex
 	drivers map[string]*gorm.DB
 }
 
@@ -294,6 +296,16 @@ func (r *Database) Drivers(driver string, names ...string) (*gorm.DB, error) {
 	}
 
 	key := driver + ":" + name
+
+	r.mu.RLock()
+	if dri, exist := r.drivers[key]; exist {
+		r.mu.RUnlock()
+		return dri, nil
+	}
+	r.mu.RUnlock()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	if dri, exist := r.drivers[key]; exist {
 		return dri, nil

@@ -2,6 +2,7 @@ package queue
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/contracts/queue"
@@ -16,15 +17,26 @@ const (
 
 type Queue struct {
 	queue.Driver
+	mu      sync.RWMutex
 	drivers map[string]queue.Driver
 }
 
 func NewQueue() *Queue {
-	defaultName := DefaultName()
-	driver, err := NewDriver("", defaultName)
+	queue, err := NewQueueWithError()
 	if err != nil {
 		color.Errorf("[queue] %s", err)
 		return nil
+	}
+
+	return queue
+}
+
+// NewQueueWithError creates the queue application and returns initialization errors.
+func NewQueueWithError() (*Queue, error) {
+	defaultName := DefaultName()
+	driver, err := NewDriver("", defaultName)
+	if err != nil {
+		return nil, err
 	}
 
 	drivers := make(map[string]queue.Driver)
@@ -33,7 +45,7 @@ func NewQueue() *Queue {
 	return &Queue{
 		drivers: drivers,
 		Driver:  driver,
-	}
+	}, nil
 }
 
 // DefaultName returns the configured default queue connection name.
@@ -64,6 +76,16 @@ func NewDriver(driver string, name string) (queue.Driver, error) {
 func (r *Queue) Channel(driver string, name string) (queue.Driver, error) {
 
 	key := name
+
+	r.mu.RLock()
+	if dri, exist := r.drivers[key]; exist {
+		r.mu.RUnlock()
+		return dri, nil
+	}
+	r.mu.RUnlock()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	if dri, exist := r.drivers[key]; exist {
 		return dri, nil

@@ -10,7 +10,12 @@ type ServiceProvider struct {
 }
 
 func (that *ServiceProvider) Register() error {
-	facades.Storage = NewStorage()
+	storage, err := NewStorageWithError()
+	if err != nil {
+		return err
+	}
+
+	facades.Storage = storage
 	return nil
 }
 
