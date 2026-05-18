@@ -71,6 +71,12 @@ go mod verify
 go mod download
 ```
 
+## Git Workflow Constraints
+
+- When merging feature work into `main`, keep `main` history linear. Prefer `git merge --ff-only <branch>` and do not create commits named like `Merge <branch> into main`.
+- If `main` cannot fast-forward, rebase the feature branch onto `main` or use a squash commit with a conventional commit message instead of a merge commit.
+- If a merge commit is accidentally pushed to `main`, remove it by resetting `main` to the merge commit's first parent, re-merge with `git merge --ff-only <branch>`, then update the remote with `git push --force-with-lease origin main`.
+
 ## Code Style Guidelines
 
 ### Package Organization
