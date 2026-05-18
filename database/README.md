@@ -9,6 +9,7 @@
 - `mysql`
 - `sqlite`
 - `postgresql`
+- `sqlserver`
 
 配置示例：
 
@@ -48,6 +49,15 @@ database:
         timezone: Asia/Shanghai
         prefix: ""
         log_mode: error
+      sqlserver:
+        driver: sqlserver
+        username: sa
+        password: ""
+        host: 127.0.0.1
+        port: "1433"
+        db: upper
+        prefix: ""
+        log_mode: error
       sqlite:
         driver: sqlite
         path: /database/default.db
@@ -61,6 +71,7 @@ db := facades.DB.Default()
 mysqlDefault, err := facades.DB.Drivers("mysql")
 mysqlReport, err := facades.DB.Drivers("mysql", "report")
 postgresDefault, err := facades.DB.Drivers("postgresql")
+sqlserverDefault, err := facades.DB.Drivers("sqlserver")
 ```
 
 注意：接口方法名是 `Drivers(driver string, names ...string)`，不是 `Channel()`。

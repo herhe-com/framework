@@ -28,3 +28,13 @@ func postgreDSN(username, password, host, port, db, sslmode, timezone string) st
 		sslmode,
 		timezone)
 }
+
+func sqlserverDSN(username, password, host, port, db string) string {
+
+	return fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s",
+		username,
+		url.QueryEscape(password),
+		host,
+		port,
+		db)
+}

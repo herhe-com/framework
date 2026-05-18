@@ -38,6 +38,15 @@ database:
         timezone: Asia/Shanghai
         prefix: ""
         log_mode: error
+      sqlserver:
+        driver: sqlserver
+        username: sa
+        password: ""
+        host: 127.0.0.1
+        port: "1433"
+        db: upper
+        prefix: ""
+        log_mode: error
       sqlite:
         driver: sqlite
         path: /database/default.db

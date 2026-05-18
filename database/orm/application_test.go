@@ -44,3 +44,21 @@ func TestDatabaseDriversCanBeLoadedConcurrently(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestResolveDatabaseDriverSupportsSQLServerDefaultConnection(t *testing.T) {
+	original := facades.Container()
+	facades.SetContainer(&facades.Services{})
+	facades.Register[contractconfig.Application](fakeConfig{
+		values: map[string]any{
+			"database.orm.default":                    "default",
+			"database.orm.connections.default.driver": DriverSQLServer,
+		},
+	})
+	t.Cleanup(func() {
+		facades.SetContainer(original)
+	})
+
+	if got := resolveDatabaseDriver("", "default"); got != DriverSQLServer {
+		t.Fatalf("expected sqlserver driver, got %q", got)
+	}
+}

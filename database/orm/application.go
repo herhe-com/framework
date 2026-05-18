@@ -12,6 +12,7 @@ import (
 	"github.com/herhe-com/framework/facades"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
@@ -20,6 +21,7 @@ import (
 const DriverMySQL string = "mysql"
 const DriverSQLite string = "sqlite"
 const DriverPostgreSQL string = "postgresql"
+const DriverSQLServer string = "sqlserver"
 
 type Database struct {
 	driver  *gorm.DB
@@ -67,6 +69,8 @@ func NewDriver(driver string, name string) (*gorm.DB, string, error) {
 		return newSQLiteClient(name)
 	case DriverPostgreSQL:
 		return newPostgreSQLClient(name)
+	case DriverSQLServer:
+		return newSQLServerClient(name)
 	}
 
 	return nil, "", fmt.Errorf("invalid driver: %s", driver)
@@ -103,7 +107,7 @@ func resolveDatabaseDriver(driver, name string) string {
 	}
 
 	if name == DefaultName() {
-		for _, candidate := range []string{DriverMySQL, DriverPostgreSQL, DriverSQLite} {
+		for _, candidate := range []string{DriverMySQL, DriverPostgreSQL, DriverSQLServer, DriverSQLite} {
 			if facades.Config().GetString("database."+candidate+".default.driver") != "" {
 				return candidate
 			}
@@ -264,6 +268,63 @@ func newPostgreSQLClient(name string) (*gorm.DB, string, error) {
 	}
 
 	dialectal := postgres.Open(postgreDSN(username, password, host, port, db, sslmode, timezone))
+
+	config := gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix: prefix,
+		},
+		Logger:                 logger.Default.LogMode(logMode),
+		SkipDefaultTransaction: true,
+		PrepareStmt:            true,
+	}
+
+	if facades.Config().GetBool("app.debug") {
+		config.PrepareStmt = false
+	}
+
+	open, err := gorm.Open(dialectal, &config)
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	return open, name, nil
+}
+
+func newSQLServerClient(name string) (*gorm.DB, string, error) {
+
+	var username, password, host, port, prefix, db string
+
+	if configDriver := DriverOf(name); configDriver != "" && configDriver != DriverSQLServer {
+		return nil, "", fmt.Errorf("invalid database config: sqlserver driver %s", configDriver)
+	}
+
+	username = ormConnectionString(name, "username", "")
+	password = ormConnectionString(name, "password", "")
+	host = ormConnectionString(name, "host", "")
+	port = ormConnectionString(name, "port", "1433")
+	prefix = ormConnectionString(name, "prefix", "")
+	db = ormConnectionString(name, "db", "")
+	log := ormConnectionString(name, "log_mode", "error")
+
+	if username == "" || password == "" || host == "" || db == "" {
+		return nil, "", errors.New("invalid database config: sqlserver")
+	}
+
+	logMode := logger.Error
+
+	switch log {
+	case "error":
+		logMode = logger.Error
+	case "info":
+		logMode = logger.Info
+	case "warn":
+		logMode = logger.Warn
+	case "silent":
+		logMode = logger.Silent
+	}
+
+	dialectal := sqlserver.Open(sqlserverDSN(username, password, host, port, db))
 
 	config := gorm.Config{
 		NamingStrategy: schema.NamingStrategy{

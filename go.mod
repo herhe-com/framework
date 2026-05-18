@@ -45,6 +45,7 @@ require (
 	golang.org/x/crypto v0.51.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
+	gorm.io/driver/sqlserver v1.6.3
 	gorm.io/gorm v1.31.1
 )
 
@@ -184,7 +185,6 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260511170946-3700d4141b60 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gorm.io/driver/sqlserver v1.6.3 // indirect
 	gorm.io/plugin/dbresolver v1.6.2 // indirect
 	modernc.org/fileutil v1.4.0 // indirect
 	modernc.org/libc v1.72.3 // indirect
