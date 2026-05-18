@@ -9,7 +9,6 @@ import (
 
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
-	"github.com/herhe-com/framework/contracts/global"
 	"github.com/herhe-com/framework/contracts/validation"
 	"github.com/herhe-com/framework/facades"
 )
@@ -63,7 +62,7 @@ func rules() []validation.Rule {
 	return []validation.Rule{
 		{
 			Tag:         "captcha",
-			Pattern:     global.PatternOfCaptcha,
+			Pattern:     PatternOfCaptcha,
 			Translation: "{0} must be a valid CAPTCHA",
 			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的验证码",
@@ -72,7 +71,7 @@ func rules() []validation.Rule {
 		},
 		{
 			Tag:         "pinyin",
-			Pattern:     global.PatternOfPinyin,
+			Pattern:     PatternOfPinyin,
 			Translation: "{0} must be a valid pinyin",
 			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的拼音",
@@ -80,7 +79,7 @@ func rules() []validation.Rule {
 		},
 		{
 			Tag:         "mobile",
-			Pattern:     global.PatternOfMobile,
+			Pattern:     PatternOfMobile,
 			Translation: "{0} must be a valid mobile phone number",
 			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的手机号",
@@ -88,7 +87,7 @@ func rules() []validation.Rule {
 		},
 		{
 			Tag:         "dirs",
-			Pattern:     global.PatternOfDirs,
+			Pattern:     PatternOfDirs,
 			Translation: "{0} must be a valid dir address",
 			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的文件夹",
@@ -96,7 +95,7 @@ func rules() []validation.Rule {
 		},
 		{
 			Tag:         "username",
-			Pattern:     global.PatternOfUsername,
+			Pattern:     PatternOfUsername,
 			Translation: "{0} must be a valid username",
 			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的用户名",
@@ -104,7 +103,7 @@ func rules() []validation.Rule {
 		},
 		{
 			Tag:         "password",
-			Pattern:     global.PatternOfPassword,
+			Pattern:     PatternOfPassword,
 			Translation: "{0} must be a valid password",
 			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的密码",
@@ -112,7 +111,7 @@ func rules() []validation.Rule {
 		},
 		{
 			Tag:         "snowflake",
-			Pattern:     global.PatternOfSnowflake,
+			Pattern:     PatternOfSnowflake,
 			Translation: "{0} must be a valid snowflake",
 			Translations: map[string]string{
 				"zh": "{0}必须是一个有效的雪花 Organization",

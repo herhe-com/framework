@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/gookit/color"
-	"github.com/herhe-com/framework/contracts/search"
+	contractsearch "github.com/herhe-com/framework/contracts/search"
 	"github.com/herhe-com/framework/facades"
 	searchconfig "github.com/herhe-com/framework/search/config"
 	"github.com/herhe-com/framework/search/elasticsearch"
@@ -13,9 +13,9 @@ import (
 )
 
 type Search struct {
-	search.Driver
+	contractsearch.Driver
 	mu      sync.RWMutex
-	drivers map[string]search.Driver
+	drivers map[string]contractsearch.Driver
 }
 
 func NewSearch() *Search {
@@ -37,7 +37,7 @@ func NewSearchWithError() (*Search, error) {
 		return nil, err
 	}
 
-	drivers := make(map[string]search.Driver)
+	drivers := make(map[string]contractsearch.Driver)
 	drivers[defaultName] = driver
 
 	return &Search{
@@ -51,19 +51,19 @@ func DefaultName() string {
 	return facades.Config().GetString("search.default", "default")
 }
 
-func NewDriver(driver string, name string) (search.Driver, error) {
+func NewDriver(driver string, name string) (contractsearch.Driver, error) {
 	if driver == "" {
 		driver = searchconfig.Driver(name, "")
 	}
 
 	switch driver {
-	case search.DriverMeiliSearch:
+	case DriverMeiliSearch:
 		return meilisearch.NewClient(name)
-	case search.DriverElasticSearch:
+	case DriverElasticSearch:
 		return elasticsearch.NewClient(name)
 	}
 
-	return nil, fmt.Errorf("invalid driver: %s, only support %s, %s", driver, search.DriverMeiliSearch, search.DriverElasticSearch)
+	return nil, fmt.Errorf("invalid driver: %s, only support %s, %s", driver, DriverMeiliSearch, DriverElasticSearch)
 }
 
 // ConnectionString returns the configured string value for a search connection field.
@@ -76,7 +76,7 @@ func ConnectionStrings(name, field string, defaultValue []string) []string {
 	return searchconfig.ConnectionStrings(name, field, defaultValue)
 }
 
-func (r *Search) Channel(driver string, name string) (search.Driver, error) {
+func (r *Search) Channel(driver string, name string) (contractsearch.Driver, error) {
 
 	key := name
 

@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	authConstant "github.com/herhe-com/framework/contracts/auth"
+	contractauth "github.com/herhe-com/framework/contracts/auth"
 )
 
 func Check(ctx *app.RequestContext) bool {
@@ -19,7 +19,7 @@ func Check(ctx *app.RequestContext) bool {
 
 func ID(ctx *app.RequestContext) string {
 
-	if value, ok := ctx.Get(authConstant.ContextOfID); ok {
+	if value, ok := ctx.Get(ContextOfID); ok {
 		return value.(string)
 	}
 
@@ -28,7 +28,7 @@ func ID(ctx *app.RequestContext) string {
 
 func Platform(ctx *app.RequestContext) (platform uint16) {
 
-	if value, exits := ctx.Get(authConstant.ContextOfPlatform); exits {
+	if value, exits := ctx.Get(ContextOfPlatform); exits {
 		platform, _ = value.(uint16)
 	}
 
@@ -48,7 +48,7 @@ func SPlatform(ctx *app.RequestContext) string {
 
 func Organization(ctx *app.RequestContext) (id sql.NullString) {
 
-	if value, exits := ctx.Get(authConstant.ContextOfOrganization); exits {
+	if value, exits := ctx.Get(ContextOfOrganization); exits {
 		if platform, ok := value.(string); ok {
 			id = sql.NullString{
 				String: platform,
@@ -62,7 +62,7 @@ func Organization(ctx *app.RequestContext) (id sql.NullString) {
 
 func Clique(ctx *app.RequestContext) (id sql.NullString) {
 
-	if value, exits := ctx.Get(authConstant.ContextOfClique); exits {
+	if value, exits := ctx.Get(ContextOfClique); exits {
 		if clique, ok := value.(string); ok && clique != "" {
 			id = sql.NullString{
 				String: clique,
@@ -74,10 +74,10 @@ func Clique(ctx *app.RequestContext) (id sql.NullString) {
 	return id
 }
 
-func Claims(ctx *app.RequestContext) (claims *authConstant.Claims) {
+func Claims(ctx *app.RequestContext) (claims *contractauth.Claims) {
 
-	if value, exist := ctx.Get(authConstant.ContextOfClaims); exist {
-		if tmp, ok := value.(authConstant.Claims); ok {
+	if value, exist := ctx.Get(ContextOfClaims); exist {
+		if tmp, ok := value.(contractauth.Claims); ok {
 			claims = &tmp
 		}
 	}

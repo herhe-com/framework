@@ -98,7 +98,7 @@ func (receiver Client) index(index string) string {
 }
 
 func (receiver Client) Dri() string {
-	return search.DriverMeiliSearch
+	return "meilisearch"
 }
 
 func (receiver Client) Ping() (bool, error) {

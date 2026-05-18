@@ -20,17 +20,17 @@ func toTrees() error {
 
 		var prefix []string
 
-		platforms, _ := facades.Config().Get("auth.platforms", []uint16{auth.CodeOfStore}).([]uint16)
+		platforms, _ := facades.Config().Get("auth.platforms", []uint16{CodeOfStore}).([]uint16)
 
 		mark := lo.CountBy(platforms, func(item uint16) bool {
-			return !lo.Contains([]uint16{auth.CodeOfPlatform, auth.CodeOfClique, auth.CodeOfStore}, item)
+			return !lo.Contains([]uint16{CodeOfPlatform, CodeOfClique, CodeOfStore}, item)
 		})
 
 		if mark > 0 {
 			return errors.New("platform configuration failed")
 		}
 
-		platforms = append(platforms, auth.CodeOfRegion)
+		platforms = append(platforms, CodeOfRegion)
 
 		trees = doTrees(permissions, prefix, platforms)
 

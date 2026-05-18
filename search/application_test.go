@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	contractconfig "github.com/herhe-com/framework/contracts/config"
-	contractsearch "github.com/herhe-com/framework/contracts/search"
 	"github.com/herhe-com/framework/facades"
 )
 
@@ -106,10 +105,10 @@ func TestSearchChannelCanBeLoadedConcurrently(t *testing.T) {
 	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
 			"search.default":                      "default",
-			"search.connections.default.driver":   contractsearch.DriverMeiliSearch,
+			"search.connections.default.driver":   DriverMeiliSearch,
 			"search.connections.default.host":     "http://127.0.0.1:7700",
 			"search.connections.default.secret":   "masterKey",
-			"search.connections.secondary.driver": contractsearch.DriverMeiliSearch,
+			"search.connections.secondary.driver": DriverMeiliSearch,
 			"search.connections.secondary.host":   "http://127.0.0.1:7700",
 			"search.connections.secondary.secret": "masterKey",
 			"search.connections.secondary.prefix": "test_",
@@ -131,7 +130,7 @@ func TestSearchChannelCanBeLoadedConcurrently(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			if _, err := app.Channel(contractsearch.DriverMeiliSearch, "secondary"); err != nil {
+			if _, err := app.Channel(DriverMeiliSearch, "secondary"); err != nil {
 				t.Errorf("expected driver, got error: %v", err)
 			}
 		}()

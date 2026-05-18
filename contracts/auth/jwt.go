@@ -2,10 +2,6 @@ package auth
 
 import "github.com/golang-jwt/jwt/v5"
 
-const (
-	JwtOfAuthorization = "Authorization"
-)
-
 type Claims struct {
 	jwt.RegisteredClaims
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/herhe-com/framework/auth"
-	authConstant "github.com/herhe-com/framework/contracts/auth"
+	contractauth "github.com/herhe-com/framework/contracts/auth"
 	"github.com/herhe-com/framework/facades"
 )
 
@@ -13,21 +13,21 @@ func Jwt() app.HandlerFunc {
 
 	return func(c context.Context, ctx *app.RequestContext) {
 
-		token := ctx.GetHeader(authConstant.JwtOfAuthorization)
+		token := ctx.GetHeader(auth.JwtOfAuthorization)
 
 		if len(token) > 0 {
 
-			var claims authConstant.Claims
+			var claims contractauth.Claims
 
 			refresh, err := auth.CheckJWToken(&claims, string(token))
 
 			if err == nil {
-				ctx.Set(authConstant.ContextOfID, claims.Subject)
-				ctx.Set(authConstant.ContextOfClaims, claims)
+				ctx.Set(auth.ContextOfID, claims.Subject)
+				ctx.Set(auth.ContextOfClaims, claims)
 			}
 
 			if platform := auth.DefaultPlatform(); platform > 0 {
-				ctx.Set(authConstant.ContextOfPlatform, platform)
+				ctx.Set(auth.ContextOfPlatform, platform)
 			}
 
 			if refresh && claims.Refresh {
@@ -38,10 +38,10 @@ func Jwt() app.HandlerFunc {
 					return
 				}
 
-				ctx.Set(authConstant.ContextOfID, claims.Subject)
-				ctx.Set(authConstant.ContextOfClaims, claims)
+				ctx.Set(auth.ContextOfID, claims.Subject)
+				ctx.Set(auth.ContextOfClaims, claims)
 
-				ctx.Header(authConstant.Authorization, refreshToken)
+				ctx.Header(auth.Authorization, refreshToken)
 
 				//  获取令牌刷新后的操作
 				if callback := facades.Config().Get("auth.callback.refresh"); callback != nil {

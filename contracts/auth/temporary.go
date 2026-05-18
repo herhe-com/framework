@@ -24,19 +24,19 @@ func (that *RoleOfTemporary) Check() bool {
 }
 
 func (that *RoleOfTemporary) IsPlatform() bool {
-	return that.Platform == CodeOfPlatform
+	return that.Platform == 666
 }
 
 func (that *RoleOfTemporary) IsClique() bool {
-	return that.Platform == CodeOfClique
+	return that.Platform == 777
 }
 
 func (that *RoleOfTemporary) IsRegion() bool {
-	return that.Platform == CodeOfRegion
+	return that.Platform == 888
 }
 
 func (that *RoleOfTemporary) IsStore() bool {
-	return that.Platform == CodeOfStore
+	return that.Platform == 999
 }
 
 func (that *RoleOfTemporary) HasBak() bool {

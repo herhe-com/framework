@@ -1,4 +1,4 @@
-package global
+package support
 
 const (
 	YES = 1

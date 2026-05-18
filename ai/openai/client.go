@@ -223,5 +223,5 @@ func (c *Client) Models() ([]ai.Model, error) {
 }
 
 func (c *Client) Dri() string {
-	return ai.DriverOpenAI
+	return "openai"
 }

@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/herhe-com/framework/contracts/auth"
 	"github.com/herhe-com/framework/facades"
 	"github.com/samber/lo"
 	"golang.org/x/crypto/bcrypt"
@@ -40,23 +39,23 @@ func NameOfPermission(platform uint16, id *string, permission string) (permissio
 }
 
 func NameOfDeveloper() string {
-	return NameOfRole(auth.CodeOfDeveloper)
+	return NameOfRole(CodeOfDeveloper)
 }
 
 func NameOfPlatform() string {
-	return NameOfRole(auth.CodeOfPlatform)
+	return NameOfRole(CodeOfPlatform)
 }
 
 func NameOfClique() string {
-	return NameOfRole(auth.CodeOfClique)
+	return NameOfRole(CodeOfClique)
 }
 
 func NameOfRegion() string {
-	return NameOfRole(auth.CodeOfRegion)
+	return NameOfRole(CodeOfRegion)
 }
 
 func NameOfStore() string {
-	return NameOfRole(auth.CodeOfStore)
+	return NameOfRole(CodeOfStore)
 }
 
 func Password(password string) string {

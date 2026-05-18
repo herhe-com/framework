@@ -6,13 +6,13 @@ import (
 	"github.com/gookit/color"
 	"github.com/herhe-com/framework/ai/ollama"
 	"github.com/herhe-com/framework/ai/openai"
-	"github.com/herhe-com/framework/contracts/ai"
+	contractai "github.com/herhe-com/framework/contracts/ai"
 	"github.com/herhe-com/framework/facades"
 )
 
 type AI struct {
-	ai.Driver
-	drivers map[string]ai.Driver
+	contractai.Driver
+	drivers map[string]contractai.Driver
 }
 
 func NewAI() *AI {
@@ -31,7 +31,7 @@ func NewAI() *AI {
 		return nil
 	}
 
-	drivers := make(map[string]ai.Driver)
+	drivers := make(map[string]contractai.Driver)
 	key := fmt.Sprintf("%s_%s", defaultDriver, "default")
 	drivers[key] = driver
 
@@ -41,29 +41,29 @@ func NewAI() *AI {
 	}
 }
 
-func NewDriver(driver string, name string) (ai.Driver, error) {
+func NewDriver(driver string, name string) (contractai.Driver, error) {
 
 	switch driver {
-	case ai.DriverOpenAI:
+	case DriverOpenAI:
 		return openai.NewClient(name)
-	case ai.DriverOllama:
+	case DriverOllama:
 		return ollama.NewClient(name)
-	case ai.DriverClaude:
+	case DriverClaude:
 		return nil, fmt.Errorf("claude driver not implemented yet")
-	case ai.DriverGemini:
+	case DriverGemini:
 		return nil, fmt.Errorf("gemini driver not implemented yet")
-	case ai.DriverQianwen:
+	case DriverQianwen:
 		return nil, fmt.Errorf("qianwen driver not implemented yet")
-	case ai.DriverZhipu:
+	case DriverZhipu:
 		return nil, fmt.Errorf("zhipu driver not implemented yet")
-	case ai.DriverDeepSeek:
+	case DriverDeepSeek:
 		return nil, fmt.Errorf("deepseek driver not implemented yet")
 	}
 
 	return nil, fmt.Errorf("invalid driver: %s", driver)
 }
 
-func (r *AI) Channel(driver string, name string) (ai.Driver, error) {
+func (r *AI) Channel(driver string, name string) (contractai.Driver, error) {
 
 	key := fmt.Sprintf("%s_%s", driver, name)
 

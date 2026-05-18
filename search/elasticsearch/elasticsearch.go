@@ -231,7 +231,7 @@ func (receiver Client) Response(response *esapi.Response) (resp string, err erro
 }
 
 func (receiver Client) Dri() string {
-	return search.DriverElasticSearch
+	return "elasticsearch"
 }
 
 func (receiver Client) Ping() (bool, error) {
