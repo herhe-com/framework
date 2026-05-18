@@ -1,6 +1,6 @@
 # Database 组件
 
-`database` 提供 GORM、Redis 和 MongoDB 的连接管理。关系型数据库和 Redis 会通过各自的 `ServiceProvider` 初始化到 `facades.DB` 和 `facades.Redis`。
+`database` 提供 GORM 和 Redis 的连接管理。关系型数据库和 Redis 会通过各自的 `ServiceProvider` 初始化到 `facades.DB` 和 `facades.Redis`。
 
 ## GORM
 
@@ -115,29 +115,6 @@ cacheRedis, err := facades.Redis.Channel("cache")
 - `database.orm.migration.table` 和 `database.orm.migration.dir` 保存迁移命名空间配置。
 - `database.orm.connections.<name>.prefix` 里的 `prefix` 按连接名读取，例如 `database.orm.connections.default.prefix`，`auth` 和 migration 都会复用这个值。
 - `database.redis.default` 只保存默认 Redis 连接名，实际连接配置位于 `database.redis.connections.<name>`。
-
-## MongoDB
-
-Mongo 配置位于 `database.mongo` 下，使用默认名 + connections 的结构：
-
-```yaml
-database:
-  mongo:
-    default: default
-    connections:
-      default:
-        driver: mongodb
-        uri: mongodb://localhost:27017/mydb
-      analytics:
-        driver: mongodb
-        host: localhost
-        port: "27017"
-        db: analytics
-```
-
-- `database.mongo.default` 只保存默认连接名，实际连接配置位于 `database.mongo.connections.<name>`。
-- `database.mongodb.*` 和顶层 `mongodb.*` 读取路径仍保留兼容兜底。
-- `database/mongodb` 使用独立的 MongoDB Driver，不依赖 GORM。
 
 ## Provider
 

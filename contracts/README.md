@@ -16,7 +16,6 @@ contracts/
 ├── filesystem/
 ├── global/
 ├── http/
-├── mongodb/
 ├── queue/
 ├── search/
 ├── service/

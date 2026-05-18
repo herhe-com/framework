@@ -41,7 +41,6 @@ require (
 	github.com/wagslane/go-rabbitmq v0.15.0
 	github.com/wenlng/go-captcha-assets v1.0.7
 	github.com/wenlng/go-captcha/v2 v2.0.5
-	go.mongodb.org/mongo-driver/v2 v2.6.0
 	golang.org/x/crypto v0.51.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
@@ -164,11 +163,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
-	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
-	github.com/xdg-go/scram v1.2.0 // indirect
-	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

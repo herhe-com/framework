@@ -15,7 +15,6 @@ import (
 	"github.com/herhe-com/framework/contracts/config"
 	"github.com/herhe-com/framework/contracts/database"
 	"github.com/herhe-com/framework/contracts/filesystem"
-	"github.com/herhe-com/framework/contracts/mongodb"
 	"github.com/herhe-com/framework/contracts/queue"
 	"github.com/herhe-com/framework/contracts/search"
 )
@@ -128,12 +127,7 @@ func Redis() database.Redis {
 
 // OptionalRedis returns the registered Redis service when available.
 func OptionalRedis() (database.Redis, bool) {
-	return Get[database.Redis]()
-}
-
-// Mongo returns the registered MongoDB service.
-func Mongo() mongodb.Mongo {
-	return MustGet[mongodb.Mongo]()
+	return Optional[database.Redis]()
 }
 
 // Storage returns the registered filesystem service.

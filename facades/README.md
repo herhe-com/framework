@@ -44,7 +44,6 @@ facades.Register(ormDatabase)              // 不推荐，可能注册为 *orm.D
 | `Config()` | `contracts/config.Application` | `config.ServiceProvider` |
 | `Database()` | `contracts/database.DB` | `database/orm.ServiceProvider` |
 | `Redis()` | `contracts/database.Redis` | `database/redis.ServiceProvider` |
-| `Mongo()` | `contracts/mongodb.Mongo` | `database/mongodb.ServiceProvider` |
 | `Storage()` | `contracts/filesystem.Storage` | `filesystem.ServiceProvider` |
 | `Queue()` | `contracts/queue.Queue` | `queue.ServiceProvider` |
 | `Search()` | `contracts/search.Search` | `search.ServiceProvider` |
