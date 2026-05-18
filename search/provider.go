@@ -1,6 +1,7 @@
 package search
 
 import (
+	"github.com/herhe-com/framework/contracts/search"
 	"github.com/herhe-com/framework/contracts/service"
 	"github.com/herhe-com/framework/facades"
 )
@@ -10,12 +11,12 @@ type ServiceProvider struct {
 }
 
 func (that *ServiceProvider) Register() error {
-	search, err := NewSearchWithError()
+	application, err := NewSearchWithError()
 	if err != nil {
 		return err
 	}
 
-	facades.Search = search
+	facades.Register[search.Search](application)
 	return nil
 }
 

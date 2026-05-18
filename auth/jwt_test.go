@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	contractauth "github.com/herhe-com/framework/contracts/auth"
+	contractconfig "github.com/herhe-com/framework/contracts/config"
 	"github.com/herhe-com/framework/facades"
 )
 
@@ -70,16 +71,17 @@ func (f fakeConfig) IsSet(key string) bool {
 }
 
 func TestNewJWTokenCanBeChecked(t *testing.T) {
-	original := facades.Cfg
-	facades.Cfg = fakeConfig{
+	original := facades.Container()
+	facades.SetContainer(&facades.Services{})
+	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
 			"app.name":   "framework",
 			"jwt.sub":    "api",
 			"jwt.secret": "test-secret",
 		},
-	}
+	})
 	t.Cleanup(func() {
-		facades.Cfg = original
+		facades.SetContainer(original)
 	})
 
 	token, err := NewJWToken("user-1", 5, true, map[string]any{"role": "admin"})

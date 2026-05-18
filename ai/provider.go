@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"github.com/herhe-com/framework/contracts/ai"
 	"github.com/herhe-com/framework/contracts/service"
 	"github.com/herhe-com/framework/facades"
 )
@@ -10,7 +11,7 @@ type ServiceProvider struct {
 }
 
 func (that *ServiceProvider) Register() error {
-	facades.AI = NewAI()
+	facades.Register[ai.AI](NewAI())
 	return nil
 }
 

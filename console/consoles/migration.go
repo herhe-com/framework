@@ -26,7 +26,7 @@ func (that *MigrationProvider) Register() console.Console {
 		Name: "数据迁移",
 	}
 
-	if facades.DB.Default() == nil {
+	if facades.Database().Default() == nil {
 		color.Errorln("\n\n请初始化数据库\n\n")
 		return migrate
 	}
@@ -41,7 +41,7 @@ func (that *MigrationProvider) Register() console.Console {
 
 	var err error
 
-	if that.db, err = facades.DB.Default().DB(); err != nil {
+	if that.db, err = facades.Database().Default().DB(); err != nil {
 		color.Errorln("\n\n数据库获取失败：%v\n\n", err)
 		return migrate
 	}
@@ -110,7 +110,7 @@ func (that *MigrationProvider) prepare(cmd *cobra.Command) bool {
 		return false
 	}
 
-	db, err := facades.DB.Drivers(driver, connectionName)
+	db, err := facades.Database().Drivers(driver, connectionName)
 	if err != nil {
 		color.Errorln("\n\n数据库获取失败：%v\n\n", err)
 		return false
@@ -430,5 +430,5 @@ func (that *MigrationProvider) version(cmd *cobra.Command, args []string) {
 }
 
 func (that *MigrationProvider) dir() string {
-	return facades.Root + orm.MigrationDir()
+	return facades.Root() + orm.MigrationDir()
 }

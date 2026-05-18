@@ -48,7 +48,7 @@ func NewQiniu(ctx context.Context, configs map[string]any) (*Qiniu, error) {
 
 	cfg.SetDefault("qiniu.delimiter", "/")
 
-	server := facades.Cfg.GetString("app.name")
+	server := facades.Config().GetString("app.name")
 	access := cfg.GetString("qiniu.access")
 	secret := cfg.GetString("qiniu.secret")
 	bucket := cfg.GetString("qiniu.bucket")
@@ -58,7 +58,7 @@ func NewQiniu(ctx context.Context, configs map[string]any) (*Qiniu, error) {
 
 	q := &Qiniu{
 		ctx:       ctx,
-		redis:     facades.Redis.Default(),
+		redis:     facades.Redis().Default(),
 		key:       fmt.Sprintf("%s:qiniu:token:%s", server, access),
 		access:    access,
 		secret:    secret,

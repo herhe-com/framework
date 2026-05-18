@@ -15,7 +15,7 @@ type Application struct {
 
 func (app *Application) configured() []crontab.Crontab {
 
-	if cs, ok := facades.Cfg.Get("crontab.functions").([]crontab.Crontab); ok {
+	if cs, ok := facades.Config().Get("crontab.functions").([]crontab.Crontab); ok {
 		return cs
 	}
 

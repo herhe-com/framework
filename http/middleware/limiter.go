@@ -36,7 +36,7 @@ func Limiter(option *LimiterOption) app.HandlerFunc {
 			}
 		}
 
-		if facades.Redis != nil {
+		if cache, ok := facades.OptionalRedis(); ok {
 
 			script := `
 				local current = redis.call("INCR", KEYS[1])
@@ -49,7 +49,7 @@ func Limiter(option *LimiterOption) app.HandlerFunc {
 				return current
 			`
 
-			if res, err := facades.Redis.Default().Eval(c, script, []string{generator}, limit, expiration.Seconds()).Int(); err != nil {
+			if res, err := cache.Default().Eval(c, script, []string{generator}, limit, expiration.Seconds()).Int(); err != nil {
 				ctx.Abort()
 				http.Fail(ctx, "Redis error!")
 				return

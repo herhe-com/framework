@@ -18,7 +18,7 @@ func register(vd *validator.Validate, trans ut.Translator, language string) (err
 
 	rule := rules()
 
-	if items, ok := facades.Cfg.Get("validation.rules", nil).([]validation.Rule); ok && len(items) > 0 {
+	if items, ok := facades.Config().Get("validation.rules", nil).([]validation.Rule); ok && len(items) > 0 {
 		rule = append(rule, items...)
 	}
 

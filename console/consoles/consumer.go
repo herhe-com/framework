@@ -22,7 +22,7 @@ func (that *ConsumerProvider) Register() console.Console {
 		Name: "消费队列",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			consumes, _ := facades.Cfg.Get("queue.consumes").([]func())
+			consumes, _ := facades.Config().Get("queue.consumes").([]func())
 
 			for _, consume := range consumes {
 				go consume()

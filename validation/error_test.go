@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-playground/validator/v10"
+	contractconfig "github.com/herhe-com/framework/contracts/config"
 	"github.com/herhe-com/framework/facades"
 )
 
@@ -70,25 +71,24 @@ func (f fakeConfig) IsSet(key string) bool {
 }
 
 func TestErrorsGroupsValidationMessagesByField(t *testing.T) {
-	originalCfg := facades.Cfg
-	originalValidator := facades.Validator
-	facades.Cfg = fakeConfig{
+	original := facades.Container()
+	facades.SetContainer(&facades.Services{})
+	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
 			"app.language":     "en",
 			"validation.label": "label",
 		},
-	}
+	})
 	NewApplication()
 	t.Cleanup(func() {
-		facades.Cfg = originalCfg
-		facades.Validator = originalValidator
+		facades.SetContainer(original)
 	})
 
 	type payload struct {
 		Name string `label:"name" validate:"required"`
 	}
 
-	err := facades.Validator.Struct(payload{})
+	err := facades.Validator().Struct(payload{})
 	if err == nil {
 		t.Fatal("expected validation to fail")
 	}

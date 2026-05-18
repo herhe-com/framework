@@ -14,13 +14,13 @@ func toTrees() error {
 
 	var trees []auth.Tree
 
-	permissions, ok := facades.Cfg.Get("auth.permissions").([]auth.Permission)
+	permissions, ok := facades.Config().Get("auth.permissions").([]auth.Permission)
 
 	if ok {
 
 		var prefix []string
 
-		platforms, _ := facades.Cfg.Get("auth.platforms", []uint16{auth.CodeOfStore}).([]uint16)
+		platforms, _ := facades.Config().Get("auth.platforms", []uint16{auth.CodeOfStore}).([]uint16)
 
 		mark := lo.CountBy(platforms, func(item uint16) bool {
 			return !lo.Contains([]uint16{auth.CodeOfPlatform, auth.CodeOfClique, auth.CodeOfStore}, item)
@@ -40,11 +40,11 @@ func toTrees() error {
 
 				key := fmt.Sprintf("%s.module.%d", "auth", platform)
 
-				facades.Cfg.Set(key, doModules(trees, platform))
+				facades.Config().Set(key, doModules(trees, platform))
 			}
 		}
 
-		facades.Cfg.Set("auth.trees", trees)
+		facades.Config().Set("auth.trees", trees)
 	}
 
 	return nil
@@ -52,7 +52,7 @@ func toTrees() error {
 
 func Trees(platform uint16, ep bool, permissions ...[]string) []auth.Tree {
 
-	all, _ := facades.Cfg.Get("auth.trees").([]auth.Tree)
+	all, _ := facades.Config().Get("auth.trees").([]auth.Tree)
 
 	var permission []string
 
@@ -67,7 +67,7 @@ func Modules(platform uint16) []auth.Module {
 
 	key := fmt.Sprintf("%s.module.%d", "auth", platform)
 
-	modules, _ := facades.Cfg.Get(key).([]auth.Module)
+	modules, _ := facades.Config().Get(key).([]auth.Module)
 
 	return modules
 }

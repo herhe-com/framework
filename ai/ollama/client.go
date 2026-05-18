@@ -22,12 +22,12 @@ type Client struct {
 func NewClient(name string) (*Client, error) {
 
 	c := &Client{
-		host:   facades.Cfg.GetString("ai.ollama." + name + ".host"),
-		model:  facades.Cfg.GetString("ai.ollama." + name + ".model"),
-		prefix: facades.Cfg.GetString("ai.ollama." + name + ".prefix"),
+		host:   facades.Config().GetString("ai.ollama." + name + ".host"),
+		model:  facades.Config().GetString("ai.ollama." + name + ".model"),
+		prefix: facades.Config().GetString("ai.ollama." + name + ".prefix"),
 	}
 
-	if err := facades.Validator.Struct(c); err != nil {
+	if err := facades.Validator().Struct(c); err != nil {
 		return nil, err
 	}
 

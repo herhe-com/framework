@@ -43,7 +43,7 @@ func NewStorage() *Storage {
 // NewStorageWithError creates the filesystem storage application and returns initialization errors.
 func NewStorageWithError() (*Storage, error) {
 	defaultDisk := DefaultDisk()
-	defaultDriver := filesystemconfig.Driver(defaultDisk, facades.Cfg.GetString("filesystem.driver"))
+	defaultDriver := filesystemconfig.Driver(defaultDisk, facades.Config().GetString("filesystem.driver"))
 
 	if defaultDriver == "" {
 		return nil, fmt.Errorf("please set default driver")
@@ -73,7 +73,7 @@ func NewDriver(driver string, disk string) (filesystem.Driver, error) {
 
 	ctx := context.Background()
 	configKey := fmt.Sprintf("filesystem.disks.%s", disk)
-	cfg, _ := facades.Cfg.Get(configKey).(map[string]any)
+	cfg, _ := facades.Config().Get(configKey).(map[string]any)
 	if cfgDriver, ok := cfg["driver"].(string); ok && cfgDriver != "" {
 		driver = cfgDriver
 	}

@@ -172,7 +172,7 @@ func findRunningProcess() (int, error) {
 	}
 
 	execName := filepath.Base(executable)
-	appName := facades.Cfg.GetString("app.name", "")
+	appName := facades.Config().GetString("app.name", "")
 
 	// 尝试多种方式查找进程
 	commands := []string{

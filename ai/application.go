@@ -17,7 +17,7 @@ type AI struct {
 
 func NewAI() *AI {
 
-	defaultDriver := facades.Cfg.GetString("ai.driver")
+	defaultDriver := facades.Config().GetString("ai.driver")
 
 	if defaultDriver == "" {
 		color.Errorln("[ai] please set default driver")

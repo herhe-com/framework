@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"github.com/herhe-com/framework/contracts/filesystem"
 	"github.com/herhe-com/framework/contracts/service"
 	"github.com/herhe-com/framework/facades"
 )
@@ -15,7 +16,7 @@ func (that *ServiceProvider) Register() error {
 		return err
 	}
 
-	facades.Storage = storage
+	facades.Register[filesystem.Storage](storage)
 	return nil
 }
 

@@ -14,7 +14,7 @@ func Keys(args ...any) string {
 
 func TTL() time.Duration {
 
-	t := facades.Cfg.GetInt64("cache.TTL")
+	t := facades.Config().GetInt64("cache.TTL")
 
 	if t <= 0 {
 		t = 120

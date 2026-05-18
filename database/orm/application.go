@@ -73,7 +73,7 @@ func NewDriver(driver string, name string) (*gorm.DB, string, error) {
 }
 
 func defaultDatabaseName() string {
-	return facades.Cfg.GetString("database.orm.default", "default")
+	return facades.Config().GetString("database.orm.default", "default")
 }
 
 // DriverOf returns the driver configured for the given ORM connection name.
@@ -83,7 +83,7 @@ func DriverOf(name string) string {
 	}
 
 	if name == DefaultName() {
-		return facades.Cfg.GetString("database.driver")
+		return facades.Config().GetString("database.driver")
 	}
 
 	return ""
@@ -104,7 +104,7 @@ func resolveDatabaseDriver(driver, name string) string {
 
 	if name == DefaultName() {
 		for _, candidate := range []string{DriverMySQL, DriverPostgreSQL, DriverSQLite} {
-			if facades.Cfg.GetString("database."+candidate+".default.driver") != "" {
+			if facades.Config().GetString("database."+candidate+".default.driver") != "" {
 				return candidate
 			}
 		}
@@ -122,11 +122,11 @@ func legacyORMConnectionKey(name, field string) string {
 }
 
 func ormConnectionString(name, field, defaultValue string) string {
-	if value := facades.Cfg.GetString(ormConnectionKey(name, field)); value != "" {
+	if value := facades.Config().GetString(ormConnectionKey(name, field)); value != "" {
 		return value
 	}
 
-	if value := facades.Cfg.GetString(legacyORMConnectionKey(name, field)); value != "" {
+	if value := facades.Config().GetString(legacyORMConnectionKey(name, field)); value != "" {
 		return value
 	}
 
@@ -178,7 +178,7 @@ func newMysqlClient(name string) (*gorm.DB, string, error) {
 		PrepareStmt:            true,
 	}
 
-	if facades.Cfg.GetBool("app.debug") {
+	if facades.Config().GetBool("app.debug") {
 		config.PrepareStmt = false
 	}
 
@@ -196,9 +196,9 @@ func newSQLiteClient(name string) (*gorm.DB, string, error) {
 		return nil, "", fmt.Errorf("invalid database config: sqlite driver %s", configDriver)
 	}
 
-	db := ormConnectionString(name, "path", facades.Cfg.GetString("database.sqlite."+name, "default.db"))
+	db := ormConnectionString(name, "path", facades.Config().GetString("database.sqlite."+name, "default.db"))
 
-	path := facades.Root + db
+	path := facades.Root() + db
 
 	dir := filepath.Dir(path)
 
@@ -214,7 +214,7 @@ func newSQLiteClient(name string) (*gorm.DB, string, error) {
 		PrepareStmt:            true,
 	}
 
-	if facades.Cfg.GetBool("app.debug") {
+	if facades.Config().GetBool("app.debug") {
 		config.Logger = logger.Default.LogMode(logger.Info)
 		config.PrepareStmt = false
 	}
@@ -274,7 +274,7 @@ func newPostgreSQLClient(name string) (*gorm.DB, string, error) {
 		PrepareStmt:            true,
 	}
 
-	if facades.Cfg.GetBool("app.debug") {
+	if facades.Config().GetBool("app.debug") {
 		config.PrepareStmt = false
 	}
 

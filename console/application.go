@@ -12,11 +12,11 @@ type Application struct {
 
 func register() error {
 
-	facades.Console = &cobra.Command{
+	facades.Register[*cobra.Command](&cobra.Command{
 		Use:     "application",
-		Short:   facades.Cfg.GetString("app.name", "UPER"),
-		Version: facades.Cfg.GetString("app.version", "1.0.0"),
-	}
+		Short:   facades.Config().GetString("app.name", "UPER"),
+		Version: facades.Config().GetString("app.version", "1.0.0"),
+	})
 
 	app := Application{}
 
@@ -24,7 +24,7 @@ func register() error {
 
 	app.registerConfiguredConsoles()
 
-	return facades.Console.Execute()
+	return facades.Console().Execute()
 }
 
 func (app *Application) getBasicConsoles() []console.Provider {
@@ -36,7 +36,7 @@ func (app *Application) getBasicConsoles() []console.Provider {
 
 func (app *Application) getConfiguredConsoles() []console.Provider {
 
-	if cons, ok := facades.Cfg.Get("kernel.consoles").([]console.Provider); ok {
+	if cons, ok := facades.Config().Get("kernel.consoles").([]console.Provider); ok {
 		return cons
 	}
 
@@ -59,7 +59,7 @@ func (app *Application) registerConsoles(providers []console.Provider) {
 		cons[index] = item.Register()
 	}
 
-	app.parseConsoles(facades.Console, cons)
+	app.parseConsoles(facades.Console(), cons)
 }
 
 func (app *Application) parseConsoles(command *cobra.Command, consoles []console.Console) {

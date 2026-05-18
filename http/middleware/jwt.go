@@ -44,7 +44,7 @@ func Jwt() app.HandlerFunc {
 				ctx.Header(authConstant.Authorization, refreshToken)
 
 				//  获取令牌刷新后的操作
-				if callback := facades.Cfg.Get("auth.callback.refresh"); callback != nil {
+				if callback := facades.Config().Get("auth.callback.refresh"); callback != nil {
 
 					if function, ok := callback.(func(c context.Context, ctx *app.RequestContext)); ok {
 						function(c, ctx)
@@ -52,7 +52,7 @@ func Jwt() app.HandlerFunc {
 				}
 			}
 
-			if callback := facades.Cfg.Get("auth.callback.jwt"); callback != nil {
+			if callback := facades.Config().Get("auth.callback.jwt"); callback != nil {
 
 				if function, ok := callback.(func(c context.Context, ctx *app.RequestContext)); ok {
 					function(c, ctx)

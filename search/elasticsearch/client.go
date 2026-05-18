@@ -25,7 +25,7 @@ func NewClient(name string) (*Client, error) {
 		password: searchconfig.ConnectionString(name, "password", ""),
 	}
 
-	if err := facades.Validator.Struct(client); err != nil {
+	if err := facades.Validator().Struct(client); err != nil {
 		return nil, err
 	}
 

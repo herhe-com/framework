@@ -33,8 +33,8 @@ func (m *Model) clear(tx *gorm.DB) {
 
 	key := id(tx)
 
-	if lo.IsNotEmpty(key) && facades.Redis != nil {
-		facades.Redis.Default().Del(tx.Statement.Context, util.Keys(tx.Statement.Schema.Table, key))
+	if cache, ok := facades.OptionalRedis(); lo.IsNotEmpty(key) && ok {
+		cache.Default().Del(tx.Statement.Context, util.Keys(tx.Statement.Schema.Table, key))
 	}
 }
 
@@ -67,7 +67,7 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 
 	key := util.Keys(table, id)
 
-	result, err := facades.Redis.Default().Get(ctx, key).Result()
+	result, err := facades.Redis().Default().Get(ctx, key).Result()
 
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return err
@@ -76,11 +76,11 @@ func FindByID(ctx context.Context, model any, id any) (err error) {
 		return
 	}
 
-	tx := facades.DB.Default().First(&model, id)
+	tx := facades.Database().Default().First(&model, id)
 
 	if tx.Error == nil {
 		hash, _ := json.Marshal(model)
-		facades.Redis.Default().Set(ctx, key, string(hash), TTL())
+		facades.Redis().Default().Set(ctx, key, string(hash), TTL())
 	} else {
 		return tx.Error
 	}
@@ -131,7 +131,7 @@ func id(tx *gorm.DB) string {
 // checkPrimaryKeys 检查模型是否有多个 primary key
 func checkPrimaryKeys(model any) error {
 	// 使用临时 DB 实例解析 schema
-	db := facades.DB.Default()
+	db := facades.Database().Default()
 	if db == nil {
 		return errors.New("database not initialized")
 	}

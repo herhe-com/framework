@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gookit/color"
+	contractconfig "github.com/herhe-com/framework/contracts/config"
 	"github.com/herhe-com/framework/facades"
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
@@ -23,11 +24,11 @@ func NewApplication() (err error) {
 
 	app.vip.SetConfigType("yaml")
 
-	if _, err = os.Stat(facades.Root + "/conf/env.yaml"); err == nil {
+	if _, err = os.Stat(facades.Root() + "/conf/env.yaml"); err == nil {
 
 		var file []byte
 
-		if file, err = os.ReadFile(facades.Root + "/conf/env.yaml"); err != nil {
+		if file, err = os.ReadFile(facades.Root() + "/conf/env.yaml"); err != nil {
 			return err
 		}
 
@@ -82,7 +83,7 @@ func NewApplication() (err error) {
 		}
 	}
 
-	facades.Cfg = app
+	facades.Register[contractconfig.Application](app)
 
 	return nil
 }

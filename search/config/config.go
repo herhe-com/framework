@@ -4,15 +4,15 @@ import "github.com/herhe-com/framework/facades"
 
 // ConnectionString returns the configured string value for a search connection field.
 func ConnectionString(name, field, defaultValue string) string {
-	if value := facades.Cfg.GetString("search.connections." + name + "." + field); value != "" {
+	if value := facades.Config().GetString("search.connections." + name + "." + field); value != "" {
 		return value
 	}
 
-	if value := facades.Cfg.GetString("search.elasticsearch." + name + "." + field); value != "" {
+	if value := facades.Config().GetString("search.elasticsearch." + name + "." + field); value != "" {
 		return value
 	}
 
-	if value := facades.Cfg.GetString("search.meilisearch." + name + "." + field); value != "" {
+	if value := facades.Config().GetString("search.meilisearch." + name + "." + field); value != "" {
 		return value
 	}
 
@@ -21,15 +21,15 @@ func ConnectionString(name, field, defaultValue string) string {
 
 // ConnectionStrings returns the configured string slice value for a search connection field.
 func ConnectionStrings(name, field string, defaultValue []string) []string {
-	if values := facades.Cfg.GetStrings("search.connections." + name + "." + field); len(values) > 0 {
+	if values := facades.Config().GetStrings("search.connections." + name + "." + field); len(values) > 0 {
 		return values
 	}
 
-	if values := facades.Cfg.GetStrings("search.elasticsearch." + name + "." + field); len(values) > 0 {
+	if values := facades.Config().GetStrings("search.elasticsearch." + name + "." + field); len(values) > 0 {
 		return values
 	}
 
-	if values := facades.Cfg.GetStrings("search.meilisearch." + name + "." + field); len(values) > 0 {
+	if values := facades.Config().GetStrings("search.meilisearch." + name + "." + field); len(values) > 0 {
 		return values
 	}
 
@@ -38,15 +38,15 @@ func ConnectionStrings(name, field string, defaultValue []string) []string {
 
 // Driver returns the configured driver name for a search connection.
 func Driver(name, defaultValue string) string {
-	if driver := facades.Cfg.GetString("search.connections." + name + ".driver"); driver != "" {
+	if driver := facades.Config().GetString("search.connections." + name + ".driver"); driver != "" {
 		return driver
 	}
 
-	if cfg, ok := facades.Cfg.Get("search.elasticsearch." + name).(map[string]any); ok && len(cfg) > 0 {
+	if cfg, ok := facades.Config().Get("search.elasticsearch." + name).(map[string]any); ok && len(cfg) > 0 {
 		return "elasticsearch"
 	}
 
-	if cfg, ok := facades.Cfg.Get("search.meilisearch." + name).(map[string]any); ok && len(cfg) > 0 {
+	if cfg, ok := facades.Config().Get("search.meilisearch." + name).(map[string]any); ok && len(cfg) > 0 {
 		return "meilisearch"
 	}
 

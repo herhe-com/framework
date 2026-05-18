@@ -48,7 +48,7 @@ func NewSearchWithError() (*Search, error) {
 
 // DefaultName returns the configured default search connection name.
 func DefaultName() string {
-	return facades.Cfg.GetString("search.default", "default")
+	return facades.Config().GetString("search.default", "default")
 }
 
 func NewDriver(driver string, name string) (search.Driver, error) {

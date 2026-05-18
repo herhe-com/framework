@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-playground/validator/v10"
+	contractconfig "github.com/herhe-com/framework/contracts/config"
 	contractsearch "github.com/herhe-com/framework/contracts/search"
 	"github.com/herhe-com/framework/facades"
 )
@@ -82,10 +83,11 @@ func (f fakeConfig) IsSet(key string) bool {
 }
 
 func TestNewSearchWithErrorReturnsConfigError(t *testing.T) {
-	originalCfg := facades.Cfg
-	facades.Cfg = fakeConfig{values: map[string]any{}}
+	original := facades.Container()
+	facades.SetContainer(&facades.Services{})
+	facades.Register[contractconfig.Application](fakeConfig{values: map[string]any{}})
 	t.Cleanup(func() {
-		facades.Cfg = originalCfg
+		facades.SetContainer(original)
 	})
 
 	search, err := NewSearchWithError()
@@ -99,9 +101,9 @@ func TestNewSearchWithErrorReturnsConfigError(t *testing.T) {
 }
 
 func TestSearchChannelCanBeLoadedConcurrently(t *testing.T) {
-	originalCfg := facades.Cfg
-	originalValidator := facades.Validator
-	facades.Cfg = fakeConfig{
+	original := facades.Container()
+	facades.SetContainer(&facades.Services{})
+	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
 			"search.default":                      "default",
 			"search.connections.default.driver":   contractsearch.DriverMeiliSearch,
@@ -112,11 +114,10 @@ func TestSearchChannelCanBeLoadedConcurrently(t *testing.T) {
 			"search.connections.secondary.secret": "masterKey",
 			"search.connections.secondary.prefix": "test_",
 		},
-	}
-	facades.Validator = validator.New()
+	})
+	facades.Register[*validator.Validate](validator.New())
 	t.Cleanup(func() {
-		facades.Cfg = originalCfg
-		facades.Validator = originalValidator
+		facades.SetContainer(original)
 	})
 
 	app, err := NewSearchWithError()

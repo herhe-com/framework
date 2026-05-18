@@ -11,23 +11,25 @@ import (
 
 func NewApplication() error {
 
-	if facades.DB.Default() == nil {
+	if facades.Database().Default() == nil {
 		return errors.New("请先初始化数据库")
 	}
 
-	connectionName := facades.Cfg.GetString("auth.casbin.database", orm.DefaultName())
+	connectionName := facades.Config().GetString("auth.casbin.database", orm.DefaultName())
 	prefix := orm.ConnectionPrefix(connectionName)
-	table := facades.Cfg.GetString("auth.casbin.table")
+	table := facades.Config().GetString("auth.casbin.table")
 
-	a, err := adapter.NewAdapterByDBUseTableName(facades.DB.Default(), prefix, table)
+	a, err := adapter.NewAdapterByDBUseTableName(facades.Database().Default(), prefix, table)
 	if err != nil {
 		return err
 	}
 
-	facades.Casbin, err = casbin.NewEnforcer(facades.Root+"/conf/casbin.conf", a)
+	enforcer, err := casbin.NewEnforcer(facades.Root()+"/conf/casbin.conf", a)
 	if err != nil {
 		return err
 	}
+
+	facades.Register[*casbin.Enforcer](enforcer)
 
 	return toTrees()
 }

@@ -10,13 +10,14 @@ import (
 
 func NewApplication() (err error) {
 
-	if facades.Redis == nil {
+	cache, ok := facades.OptionalRedis()
+	if !ok {
 		return errors.New("please initialize Redis first")
 	}
 
-	pool := goredis.NewPool(facades.Redis.Default())
+	pool := goredis.NewPool(cache.Default())
 
-	facades.Locker = redsync.New(pool)
+	facades.Register[*redsync.Redsync](redsync.New(pool))
 
 	return nil
 }

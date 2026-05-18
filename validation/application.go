@@ -61,7 +61,7 @@ func NewApplication() {
 	trans, _ = uni.GetTranslator(language)
 
 	valid.RegisterTagNameFunc(func(field reflect.StructField) string {
-		return field.Tag.Get(facades.Cfg.GetString("validation.label", "label"))
+		return field.Tag.Get(facades.Config().GetString("validation.label", "label"))
 	})
 
 	if err := register(valid, trans, language); err != nil {
@@ -73,12 +73,12 @@ func NewApplication() {
 
 	translation(valid, trans, language)
 
-	facades.Validator = valid
+	facades.Register[*validator.Validate](valid)
 }
 
 func translator() (translator locales.Translator, language string) {
 
-	language = facades.Cfg.GetString("app.language")
+	language = facades.Config().GetString("app.language")
 
 	switch language {
 	case "ar":
@@ -163,7 +163,7 @@ func translations(vd *validator.Validate, trans ut.Translator, language string) 
 
 func translation(vd *validator.Validate, trans ut.Translator, language string) {
 
-	myTranslations := facades.Cfg.GetMaps(fmt.Sprintf("validation.translation.%s", language))
+	myTranslations := facades.Config().GetMaps(fmt.Sprintf("validation.translation.%s", language))
 
 	for key, val := range myTranslations {
 

@@ -65,13 +65,13 @@ func LoginLimiter() app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 
 		// 从配置文件读取所有配置
-		maxAttempts := facades.Cfg.GetInt64("auth.login.max_attempts", 5)
-		lockMinutes := facades.Cfg.GetInt("auth.login.lock_duration", 15)
+		maxAttempts := facades.Config().GetInt64("auth.login.max_attempts", 5)
+		lockMinutes := facades.Config().GetInt("auth.login.lock_duration", 15)
 		lockDuration := time.Duration(lockMinutes) * time.Minute
-		showAttempts := facades.Cfg.GetBool("auth.login.show_attempts", false)
-		identifierField := facades.Cfg.GetString("auth.login.identifier_field", "username")
-		lockMessage := facades.Cfg.GetString("auth.login.lock_message", "Account is locked. Please try again in %d minutes.")
-		attemptsMessage := facades.Cfg.GetString("auth.login.attempts_message", "%s (Failed %d times, %d attempts remaining before account lock)")
+		showAttempts := facades.Config().GetBool("auth.login.show_attempts", false)
+		identifierField := facades.Config().GetString("auth.login.identifier_field", "username")
+		lockMessage := facades.Config().GetString("auth.login.lock_message", "Account is locked. Please try again in %d minutes.")
+		attemptsMessage := facades.Config().GetString("auth.login.attempts_message", "%s (Failed %d times, %d attempts remaining before account lock)")
 
 		// 绑定请求数据到 map
 		var requestData map[string]any
@@ -91,7 +91,8 @@ func LoginLimiter() app.HandlerFunc {
 		}
 
 		// 检查 Redis 是否可用
-		if facades.Redis == nil {
+		cache, ok := facades.OptionalRedis()
+		if !ok {
 			ctx.Next(c)
 			return
 		}
@@ -101,7 +102,7 @@ func LoginLimiter() app.HandlerFunc {
 		attemptsKey := util.Keys("login:attempts", identifier)
 
 		// 使用 Lua 脚本检查是否被锁定（单次 Redis 调用）
-		result, err := facades.Redis.Default().Eval(c, checkLockScript, []string{lockKey}).Result()
+		result, err := cache.Default().Eval(c, checkLockScript, []string{lockKey}).Result()
 		if err == nil {
 			if resultSlice, ok := result.([]interface{}); ok && len(resultSlice) == 2 {
 				if locked, ok := resultSlice[0].(int64); ok && locked == 1 {
@@ -123,13 +124,13 @@ func LoginLimiter() app.HandlerFunc {
 			// 通过 Code 字段判断登录是否成功（Code == 20000 表示成功）
 			if resp.Code == 20000 {
 				// 登录成功，清除失败记录
-				facades.Redis.Default().Del(c, attemptsKey)
+				cache.Default().Del(c, attemptsKey)
 				return
 			}
 		}
 
 		// 登录失败，使用 Lua 脚本原子性地处理失败逻辑（单次 Redis 调用）
-		result, err = facades.Redis.Default().Eval(c, handleFailureScript,
+		result, err = cache.Default().Eval(c, handleFailureScript,
 			[]string{attemptsKey, lockKey},
 			maxAttempts, int(lockDuration.Seconds())).Result()
 

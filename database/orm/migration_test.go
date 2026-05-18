@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	contractconfig "github.com/herhe-com/framework/contracts/config"
 	"github.com/herhe-com/framework/facades"
 )
 
@@ -69,15 +70,16 @@ func (f fakeConfig) IsSet(key string) bool {
 }
 
 func TestMigrationConfigPrefersNewNamespace(t *testing.T) {
-	original := facades.Cfg
-	facades.Cfg = fakeConfig{
+	original := facades.Container()
+	facades.SetContainer(&facades.Services{})
+	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
 			"database.orm.migration.table": "new_table",
 			"database.orm.migration.dir":   "/new/migration",
 		},
-	}
+	})
 	t.Cleanup(func() {
-		facades.Cfg = original
+		facades.SetContainer(original)
 	})
 
 	if got := MigrationTableName(); got != "new_table" {

@@ -17,7 +17,8 @@ func Temporary(c context.Context, ctx *app.RequestContext) (role *auth.RoleOfTem
 
 	result, ex := ctx.Get(key)
 
-	if facades.Redis == nil {
+	cache, ok := facades.OptionalRedis()
+	if !ok {
 		return nil, errors.New("please initialize Redis first")
 	}
 
@@ -25,7 +26,7 @@ func Temporary(c context.Context, ctx *app.RequestContext) (role *auth.RoleOfTem
 
 		var res auth.RoleOfTemporary
 
-		err = facades.Redis.Default().Get(c, RoleOfName(ID(ctx))).Scan(&res)
+		err = cache.Default().Get(c, RoleOfName(ID(ctx))).Scan(&res)
 
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
@@ -56,11 +57,11 @@ func SetTemporaryRole(c context.Context, ctx *app.RequestContext, platform uint1
 		data.Bak = backs[0]
 	}
 
-	lifetime := facades.Cfg.GetInt("jwt.lifetime")
+	lifetime := facades.Config().GetInt("jwt.lifetime")
 
 	expired := time.Hour * 2 * time.Duration(lifetime)
 
-	if _, err = facades.Redis.Default().Set(c, RoleOfName(ID(ctx)), &data, expired).Result(); err != nil {
+	if _, err = facades.Redis().Default().Set(c, RoleOfName(ID(ctx)), &data, expired).Result(); err != nil {
 		return err
 	}
 
@@ -69,7 +70,7 @@ func SetTemporaryRole(c context.Context, ctx *app.RequestContext, platform uint1
 
 func DeleteTemporaryRole(c context.Context, ctx *app.RequestContext) (err error) {
 
-	_, err = facades.Redis.Default().Del(c, RoleOfName(ID(ctx))).Result()
+	_, err = facades.Redis().Default().Del(c, RoleOfName(ID(ctx))).Result()
 
 	if err != nil {
 		return err
@@ -80,11 +81,11 @@ func DeleteTemporaryRole(c context.Context, ctx *app.RequestContext) (err error)
 
 func RefreshTemporaryRole(c context.Context, ctx *app.RequestContext) (err error) {
 
-	lifetime := facades.Cfg.GetInt("jwt.lifetime")
+	lifetime := facades.Config().GetInt("jwt.lifetime")
 
 	expired := time.Hour * 2 * time.Duration(lifetime)
 
-	_, err = facades.Redis.Default().Expire(c, RoleOfName(ID(ctx)), expired).Result()
+	_, err = facades.Redis().Default().Expire(c, RoleOfName(ID(ctx)), expired).Result()
 
 	if err != nil {
 		return err
@@ -95,7 +96,7 @@ func RefreshTemporaryRole(c context.Context, ctx *app.RequestContext) (err error
 
 func RoleOfName(id string) string {
 
-	name := facades.Cfg.GetString("app.name")
+	name := facades.Config().GetString("app.name")
 
 	return name + ":" + "role" + ":" + id
 }

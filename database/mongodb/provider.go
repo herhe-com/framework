@@ -1,6 +1,7 @@
 package mongodb
 
 import (
+	"github.com/herhe-com/framework/contracts/mongodb"
 	"github.com/herhe-com/framework/contracts/service"
 	"github.com/herhe-com/framework/facades"
 )
@@ -11,13 +12,13 @@ type ServiceProvider struct {
 
 func (p *ServiceProvider) Register() (err error) {
 
-	mongodb, err := NewApplication()
+	application, err := NewApplication()
 
 	if err != nil {
 		return err
 	}
 
-	facades.Mongo = mongodb
+	facades.Register[mongodb.Mongo](application)
 
 	return nil
 }

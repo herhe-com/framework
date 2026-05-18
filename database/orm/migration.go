@@ -3,7 +3,7 @@ package orm
 import "github.com/herhe-com/framework/facades"
 
 func migrationString(field, defaultValue string) string {
-	if value := facades.Cfg.GetString("database.orm.migration." + field); value != "" {
+	if value := facades.Config().GetString("database.orm.migration." + field); value != "" {
 		return value
 	}
 

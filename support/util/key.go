@@ -9,7 +9,7 @@ import (
 
 func Keys(args ...any) string {
 
-	name := facades.Cfg.GetString("app.name")
+	name := facades.Config().GetString("app.name")
 
 	names := make([]string, 0)
 

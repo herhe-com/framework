@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"github.com/herhe-com/framework/contracts/database"
 	"github.com/herhe-com/framework/contracts/service"
 	"github.com/herhe-com/framework/facades"
 )
@@ -11,13 +12,13 @@ type ServiceProvider struct {
 
 func (p *ServiceProvider) Register() (err error) {
 
-	database, err := NewApplication()
+	db, err := NewApplication()
 
 	if err != nil {
 		return err
 	}
 
-	facades.DB = database
+	facades.Register[database.DB](db)
 
 	return nil
 }

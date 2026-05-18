@@ -21,13 +21,13 @@ import (
 
 func Click() (result *captcha.Click, err error) {
 
-	minLen := facades.Cfg.GetInt("captcha.click.min", 4)
-	maxLen := facades.Cfg.GetInt("captcha.click.max", 4)
+	minLen := facades.Config().GetInt("captcha.click.min", 4)
+	maxLen := facades.Config().GetInt("captcha.click.max", 4)
 
-	width := facades.Cfg.GetInt("captcha.click.width", 300)
-	height := facades.Cfg.GetInt("captcha.click.height", 220)
+	width := facades.Config().GetInt("captcha.click.width", 300)
+	height := facades.Config().GetInt("captcha.click.height", 220)
 
-	char := facades.Cfg.GetString("captcha.click.char", "")
+	char := facades.Config().GetString("captcha.click.char", "")
 
 	var chars []string
 
@@ -104,7 +104,7 @@ func Click() (result *captcha.Click, err error) {
 
 func ClickVerify(sources []captcha.Dot, targets []click.Dot) error {
 
-	padding := facades.Cfg.GetInt("captcha.click.padding", 5)
+	padding := facades.Config().GetInt("captcha.click.padding", 5)
 
 	if len(sources) != len(targets) {
 		return errors.New("验证码长度不一致")
@@ -135,11 +135,11 @@ func ClickVerify(sources []captcha.Dot, targets []click.Dot) error {
 
 func background() ([]image.Image, error) {
 
-	dir := facades.Cfg.GetString("captcha.resources.bg", "/resources/bg")
+	dir := facades.Config().GetString("captcha.resources.bg", "/resources/bg")
 
 	dir = "/" + strings.Trim(dir, "/")
 
-	entries, err := os.ReadDir(facades.Root + dir)
+	entries, err := os.ReadDir(facades.Root() + dir)
 
 	if err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func background() ([]image.Image, error) {
 
 	for _, file := range files {
 
-		imgBytes, err := os.ReadFile(facades.Root + dir + "/" + file)
+		imgBytes, err := os.ReadFile(facades.Root() + dir + "/" + file)
 
 		if err != nil {
 			return nil, err
@@ -193,11 +193,11 @@ func background() ([]image.Image, error) {
 
 func font() (*truetype.Font, error) {
 
-	dir := facades.Cfg.GetString("captcha.resources.font", "/resources/font")
+	dir := facades.Config().GetString("captcha.resources.font", "/resources/font")
 
 	dir = "/" + strings.Trim(dir, "/")
 
-	entries, _ := os.ReadDir(facades.Root + dir)
+	entries, _ := os.ReadDir(facades.Root() + dir)
 
 	files := make([]string, 0)
 
@@ -216,7 +216,7 @@ func font() (*truetype.Font, error) {
 
 	ft := files[rand.Intn(len(files))]
 
-	fontBytes, err := os.ReadFile(facades.Root + dir + "/" + ft)
+	fontBytes, err := os.ReadFile(facades.Root() + dir + "/" + ft)
 
 	if err != nil {
 		return nil, err

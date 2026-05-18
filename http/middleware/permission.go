@@ -13,7 +13,7 @@ func Permission(permission string) app.HandlerFunc {
 
 	return func(c context.Context, ctx *app.RequestContext) {
 
-		if ok, _ := facades.Casbin.HasRoleForUser(auth.NameOfUser(auth.ID(ctx)), auth.NameOfDeveloper()); ok {
+		if ok, _ := facades.Casbin().HasRoleForUser(auth.NameOfUser(auth.ID(ctx)), auth.NameOfDeveloper()); ok {
 			ctx.Next(c)
 			return
 		}
@@ -31,7 +31,7 @@ func Permission(permission string) app.HandlerFunc {
 			permissions = append(permissions, auth.SPlatform(ctx))
 		}
 
-		if ok, _ := facades.Casbin.Enforce(permissions...); !ok {
+		if ok, _ := facades.Casbin().Enforce(permissions...); !ok {
 			ctx.Abort()
 			http.Forbidden(ctx)
 			return

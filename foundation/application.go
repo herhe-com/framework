@@ -34,7 +34,7 @@ func (a *Application) Boot() {
 
 func (a *Application) SetLocation() {
 
-	if loc, err := time.LoadLocation(facades.Cfg.GetString("app.location")); err == nil {
+	if loc, err := time.LoadLocation(facades.Config().GetString("app.location")); err == nil {
 		time.Local = loc
 		carbon.SetLocation(loc)
 	}
@@ -47,10 +47,19 @@ func (a *Application) getBasicServiceProviders() []service.Provider {
 }
 
 func (a *Application) getConfiguredServiceProviders() []service.Provider {
+	config := facades.Config()
 
-	if providers, ok := facades.Cfg.Get("kernel.providers").([]service.Provider); ok {
+	if !config.IsSet("kernel.providers") {
+		return nil
+	}
+
+	providers, ok := config.Get("kernel.providers").([]service.Provider)
+	if ok {
 		return providers
 	}
+
+	color.Errorf("kernel.providers must be []service.Provider")
+	os.Exit(1)
 
 	return nil
 }
@@ -74,6 +83,11 @@ func (a *Application) bootConfiguredServiceProviders() {
 func (a *Application) RegisterServiceProviders(providers []service.Provider) {
 
 	for _, provider := range providers {
+		if provider == nil {
+			color.Errorf("register service provider error: provider cannot be nil")
+			os.Exit(1)
+		}
+
 		if err := provider.Register(); err != nil {
 			color.Errorf("register service provider error: %v", err)
 			os.Exit(1)
@@ -84,6 +98,11 @@ func (a *Application) RegisterServiceProviders(providers []service.Provider) {
 func (a *Application) BootServiceProviders(providers []service.Provider) {
 
 	for _, provider := range providers {
+		if provider == nil {
+			color.Errorf("boot service provider error: provider cannot be nil")
+			os.Exit(1)
+		}
+
 		if err := provider.Boot(); err != nil {
 			color.Errorf("boot service provider error: %v", err)
 			os.Exit(1)
@@ -95,5 +114,5 @@ func (a *Application) setRootPath() {
 
 	root, _ := os.Getwd()
 
-	facades.Root = root
+	facades.Register[facades.RootPath](facades.RootPath(root))
 }

@@ -1,89 +1,79 @@
 # Facades 组件
 
-`facades` 提供全局单例访问器。框架中的服务 provider 会把初始化后的组件写入这些变量，业务代码再通过 `facades.DB`、`facades.Cfg`、`facades.Storage` 等访问能力。
+`facades` 提供一个类型索引的服务注册表。Provider 使用 `facades.Register[T]()` 注册服务，业务或框架内部通过 `facades.Get[T]()`、`facades.MustGet[T]()` 或薄访问器获取服务。
 
-## 可用 Facade
+旧的全局变量式写法已经移除，例如不再使用 `facades.Cfg.GetString(...)`，改为 `facades.Config().GetString(...)` 或 `facades.MustGet[config.Application]().GetString(...)`。
 
-| 名称 | 类型 | 初始化来源 |
+## 核心 API
+
+注册服务：
+
+```go
+facades.Register[config.Application](app)
+facades.Register[database.DB](db)
+facades.Register[filesystem.Storage](storage)
+```
+
+获取服务：
+
+```go
+cfg := facades.MustGet[config.Application]()
+db, ok := facades.Get[database.DB]()
+```
+
+访问器：
+
+```go
+name := facades.Config().GetString("app.name", "UPER")
+db := facades.Database().Default()
+storage := facades.Storage()
+```
+
+注册接口实现时需要显式指定接口类型，避免按具体类型注册后无法按接口取回：
+
+```go
+facades.Register[database.DB](ormDatabase) // 推荐
+facades.Register(ormDatabase)              // 不推荐，可能注册为 *orm.Database
+```
+
+## 可用服务
+
+| 访问器 | 注册类型 | 初始化来源 |
 | --- | --- | --- |
-| `Cfg` | `contracts/config.Application` | `config.ServiceProvider` |
-| `DB` | `contracts/database.DB` | `database/orm.ServiceProvider` |
-| `Redis` | `contracts/database.Redis` | `database/redis.ServiceProvider` |
-| `Mongo` | `contracts/mongodb.Mongo` | `database/mongodb.ServiceProvider` |
-| `Storage` | `contracts/filesystem.Storage` | `filesystem.ServiceProvider` |
-| `Queue` | `contracts/queue.Queue` | `queue.ServiceProvider` |
-| `Search` | `contracts/search.Search` | `search.ServiceProvider` |
-| `AI` | `contracts/ai.AI` | `ai.ServiceProvider` |
-| `Validator` | `*validator.Validate` | `validation.ServiceProvider` |
-| `Console` | `*cobra.Command` | `console.ServiceProvider` |
-| `Casbin` | `*casbin.Enforcer` | `auth.ServiceProvider` |
-| `Locker` | `*redsync.Redsync` | `microservice/locker.ServiceProvider` |
-| `Snowflake` | `*snowflake.Node` | `microservice/snowflake.ServiceProvider` |
-| `Root` | `string` | `foundation.init()` |
+| `Config()` | `contracts/config.Application` | `config.ServiceProvider` |
+| `Database()` | `contracts/database.DB` | `database/orm.ServiceProvider` |
+| `Redis()` | `contracts/database.Redis` | `database/redis.ServiceProvider` |
+| `Mongo()` | `contracts/mongodb.Mongo` | `database/mongodb.ServiceProvider` |
+| `Storage()` | `contracts/filesystem.Storage` | `filesystem.ServiceProvider` |
+| `Queue()` | `contracts/queue.Queue` | `queue.ServiceProvider` |
+| `Search()` | `contracts/search.Search` | `search.ServiceProvider` |
+| `AI()` | `contracts/ai.AI` | `ai.ServiceProvider` |
+| `Validator()` | `*validator.Validate` | `validation.ServiceProvider` |
+| `Console()` | `*cobra.Command` | `console.ServiceProvider` |
+| `Casbin()` | `*casbin.Enforcer` | `auth.ServiceProvider` |
+| `Locker()` | `*redsync.Redsync` | `microservice/locker.ServiceProvider` |
+| `Snowflake()` | `*snowflake.Node` | `microservice/snowflake.ServiceProvider` |
+| `Root()` | `facades.RootPath` | `foundation.init()` |
 
-## 常用示例
+## 可选依赖
 
-配置：
-
-```go
-name := facades.Cfg.GetString("app.name", "UPER")
-debug := facades.Cfg.GetBool("app.debug", false)
-```
-
-数据库：
+某些能力是可选的，例如 Redis。需要容错时使用 `Get[T]()` 或封装访问器：
 
 ```go
-db := facades.DB.Default()
-reportDB, err := facades.DB.Drivers("mysql", "report")
-```
-
-Redis：
-
-```go
-redis := facades.Redis.Default()
-cacheRedis, err := facades.Redis.Channel("cache")
-```
-
-文件存储：
-
-```go
-err := facades.Storage.Put("uploads/file.txt", reader, size)
-
-s3Public, err := facades.Storage.Disk("s3", "public")
-```
-
-队列：
-
-```go
-err := facades.Queue.Producer(body, "basic", "basic_email", []string{"email"}, 0, 0)
-
-err = facades.Queue.Consumer(handler, "basic", "basic_email", "email", false, 0, 3)
-```
-
-校验器：
-
-```go
-err := facades.Validator.Struct(request)
-```
-
-权限：
-
-```go
-allowed, err := facades.Casbin.Enforce(user, resource, action)
+if redis, ok := facades.OptionalRedis(); ok {
+    redis.Default().Del(ctx, key)
+}
 ```
 
 ## 初始化顺序
 
-业务代码必须在对应 provider 注册后再使用 facade。`example` 基础项目推荐启动顺序如下：
-
-1. `foundation` 初始化 `facades.Cfg`。
-2. 业务 `config/*.go` 通过 `init()` 写入 `kernel.providers`。
-3. `foundation.Application{}.Boot()` 注册 `orm`、`redis`、`filesystem`、`validation`、`auth`、`console` 等 provider。
-4. 路由和业务 handler 中使用 `facades.*`。
+1. `foundation` 注册 `facades.RootPath`。
+2. `config.ServiceProvider` 注册 `contracts/config.Application`。
+3. 业务配置中的 `kernel.providers` 注册 ORM、Redis、Filesystem、Validation、Auth、Console 等 provider。
+4. 路由和业务 handler 中通过 `facades.*()` 或 `facades.MustGet[T]()` 使用服务。
 
 ## 风险和约束
 
-- Facade 是全局变量，测试时需要小心隔离状态。
-- 未注册 provider 时直接调用会出现 nil panic，例如 `facades.DB.Default()`。
-- 多服务共用同一进程时，不同服务写入同名配置会互相覆盖。
-- `Console` 是 Cobra 根命令，命令注册由 `console.ServiceProvider` 完成，不应调用不存在的 `facades.Console.Register()`。
+- 注册表仍然是进程级全局状态，测试时需要用 `SetContainer(&facades.Services{})` 隔离。
+- 未注册服务时调用 `MustGet[T]()` 或访问器会 panic。
+- Provider 内部应使用 `facades.Register[T]()`，不要新增每个服务专属的 `Set/Get`。

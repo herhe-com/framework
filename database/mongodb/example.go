@@ -16,7 +16,7 @@ import (
 // ExampleBasicOperations shows CRUD operations
 func ExampleBasicOperations() error {
 	// Get default MongoDB client
-	client := facades.Mongo.Default()
+	client := facades.Mongo().Default()
 	if client == nil {
 		return fmt.Errorf("MongoDB not initialized")
 	}
@@ -63,7 +63,7 @@ func ExampleBasicOperations() error {
 // ExampleMultipleConnections shows how to use multiple MongoDB connections
 func ExampleMultipleConnections() error {
 	// Get a specific MongoDB connection
-	analyticsClient, err := facades.Mongo.Driver("analytics")
+	analyticsClient, err := facades.Mongo().Driver("analytics")
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func ExampleMultipleConnections() error {
 
 // ExampleTransaction shows how to use MongoDB transactions
 func ExampleTransaction() error {
-	client := facades.Mongo.Default()
+	client := facades.Mongo().Default()
 	if client == nil {
 		return fmt.Errorf("MongoDB not initialized")
 	}
@@ -124,7 +124,7 @@ func ExampleTransaction() error {
 
 // ExampleAggregation shows how to use aggregation pipeline
 func ExampleAggregation() error {
-	client := facades.Mongo.Default()
+	client := facades.Mongo().Default()
 	database := client.Database("mydb")
 	collection := database.Collection("orders")
 
@@ -159,7 +159,7 @@ func ExampleAggregation() error {
 
 // ExampleIndexes shows how to create indexes
 func ExampleIndexes() error {
-	client := facades.Mongo.Default()
+	client := facades.Mongo().Default()
 	database := client.Database("mydb")
 	collection := database.Collection("users")
 

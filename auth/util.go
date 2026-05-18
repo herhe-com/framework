@@ -75,7 +75,7 @@ func CheckPassword(password, crypt string) bool {
 
 func DefaultPlatform() uint16 {
 
-	platforms, ok := facades.Cfg.Get("auth.platforms").([]uint16)
+	platforms, ok := facades.Config().Get("auth.platforms").([]uint16)
 	if !ok || len(platforms) == 0 {
 		return 0
 	}

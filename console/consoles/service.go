@@ -21,8 +21,8 @@ func (p *ServiceProvider) Register() console.Console {
 		Name: "启动微服务",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			addr := facades.Cfg.GetString("service.address", "0.0.0.0")
-			port := facades.Cfg.GetString("service.port", "8600")
+			addr := facades.Config().GetString("service.address", "0.0.0.0")
+			port := facades.Config().GetString("service.port", "8600")
 
 			options := make([]server.Option, 0)
 
@@ -30,13 +30,13 @@ func (p *ServiceProvider) Register() console.Console {
 
 			options = append(options, server.WithServiceAddr(address))
 
-			opts, _ := facades.Cfg.Get("service.options").([]server.Option)
+			opts, _ := facades.Config().Get("service.options").([]server.Option)
 
 			if len(opts) > 0 {
 				options = append(options, opts...)
 			}
 
-			service, ok := facades.Cfg.Get("service.handle").(func(options ...server.Option) error)
+			service, ok := facades.Config().Get("service.handle").(func(options ...server.Option) error)
 
 			if !ok {
 				color.Errorln("未配置微服务启动项\n")

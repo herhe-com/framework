@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	contractconfig "github.com/herhe-com/framework/contracts/config"
 	"github.com/herhe-com/framework/facades"
 )
 
@@ -69,10 +70,11 @@ func (f fakeConfig) IsSet(key string) bool {
 }
 
 func TestNewStorageWithErrorReturnsConfigError(t *testing.T) {
-	original := facades.Cfg
-	facades.Cfg = fakeConfig{values: map[string]any{}}
+	original := facades.Container()
+	facades.SetContainer(&facades.Services{})
+	facades.Register[contractconfig.Application](fakeConfig{values: map[string]any{}})
 	t.Cleanup(func() {
-		facades.Cfg = original
+		facades.SetContainer(original)
 	})
 
 	storage, err := NewStorageWithError()

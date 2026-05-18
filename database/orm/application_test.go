@@ -4,14 +4,15 @@ import (
 	"sync"
 	"testing"
 
+	contractconfig "github.com/herhe-com/framework/contracts/config"
 	"github.com/herhe-com/framework/facades"
 )
 
 func TestDatabaseDriversCanBeLoadedConcurrently(t *testing.T) {
-	originalCfg := facades.Cfg
-	originalRoot := facades.Root
-	facades.Root = t.TempDir() + "/"
-	facades.Cfg = fakeConfig{
+	original := facades.Container()
+	facades.SetContainer(&facades.Services{})
+	facades.Register[facades.RootPath](facades.RootPath(t.TempDir() + "/"))
+	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
 			"database.orm.default":                    "default",
 			"database.orm.connections.default.driver": DriverSQLite,
@@ -19,10 +20,9 @@ func TestDatabaseDriversCanBeLoadedConcurrently(t *testing.T) {
 			"database.orm.connections.report.driver":  DriverSQLite,
 			"database.orm.connections.report.path":    "report.db",
 		},
-	}
+	})
 	t.Cleanup(func() {
-		facades.Cfg = originalCfg
-		facades.Root = originalRoot
+		facades.SetContainer(original)
 	})
 
 	db, err := NewApplication()

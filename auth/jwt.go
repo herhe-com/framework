@@ -50,7 +50,7 @@ const (
 // NewJWToken
 func NewJWToken(id string, lifetime int, refresh bool, ext map[string]any) (token string, err error) {
 
-	sub := facades.Cfg.GetString("jwt.sub")
+	sub := facades.Config().GetString("jwt.sub")
 
 	now := carbon.Now()
 
@@ -79,7 +79,8 @@ func BlacklistOfJwtValue(c context.Context, ctx *app.RequestContext) (bool, erro
 		return true, errors.New("claims cannot be null")
 	}
 
-	if facades.Redis == nil {
+	cache, ok := facades.OptionalRedis()
+	if !ok {
 		return true, errors.New("redis cannot be null")
 	}
 
@@ -91,7 +92,7 @@ func BlacklistOfJwtValue(c context.Context, ctx *app.RequestContext) (bool, erro
 		expires = MaxBlacklistExpiry
 	}
 
-	return Blacklist(c, now.Timestamp(), expires, "jwt", Claims(ctx).ID), nil
+	return BlacklistWithRedis(cache, c, now.Timestamp(), expires, "jwt", Claims(ctx).ID), nil
 }
 
 func MakeJWToken(claims auth.Claims, secrets ...string) (token string, err error) {
@@ -149,7 +150,7 @@ func CheckJWToken(claims *auth.Claims, token string, secrets ...string) (refresh
 
 	now := carbon.Now()
 
-	sub := facades.Cfg.GetString("jwt.sub")
+	sub := facades.Config().GetString("jwt.sub")
 
 	// Verify issuer
 	if claims.Issuer != Issuer(sub) {
@@ -192,13 +193,14 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 
 	var blacklists map[string]string
 
-	if facades.Redis != nil {
-		blacklists, err = facades.Redis.Default().HGetAll(ctx, bk).Result()
+	cache, hasRedis := facades.OptionalRedis()
+	if hasRedis {
+		blacklists, err = cache.Default().HGetAll(ctx, bk).Result()
 	}
 
 	now := carbon.Now()
 
-	if facades.Redis == nil || errors.Is(err, redis.Nil) || len(blacklists) <= 0 {
+	if !hasRedis || errors.Is(err, redis.Nil) || len(blacklists) <= 0 {
 
 		lifetime := claims.ExpiresAt.Sub(claims.IssuedAt.Time).Seconds()
 
@@ -210,11 +212,11 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 			return "", err
 		}
 
-		if facades.Redis != nil {
+		if hasRedis {
 
 			expire := carbon.CreateFromStdTime(claims.ExpiresAt.Time).AddSeconds(int(lifetime))
 
-			if result, err := facades.Redis.Default().Eval(ctx, luaSetRefreshToken, []string{bk}, token, now.ToDateTimeString(), expire.Timestamp()).Result(); err != nil {
+			if result, err := cache.Default().Eval(ctx, luaSetRefreshToken, []string{bk}, token, now.ToDateTimeString(), expire.Timestamp()).Result(); err != nil {
 				return "", err
 			} else if fmt.Sprintf("%v", result) != "1" {
 				return "", errors.New("failed to set the refresh token")
@@ -237,7 +239,7 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 
 		diff := now.DiffAbsInSeconds(carbon.Parse(created))
 
-		leeway := facades.Cfg.GetInt64("jwt.leeway")
+		leeway := facades.Config().GetInt64("jwt.leeway")
 
 		leeways = lo.Filter(leeways, func(item int64, index int) bool {
 			return item > 0
@@ -257,7 +259,7 @@ func RefreshJWToken(ctx context.Context, claims *auth.Claims, leeways ...int64) 
 
 func Secret(secrets ...string) (secret string, err error) {
 
-	secret = facades.Cfg.GetString("jwt.secret")
+	secret = facades.Config().GetString("jwt.secret")
 
 	secrets = lo.Filter(secrets, func(item string, index int) bool {
 		return lo.IsNotEmpty(item)
@@ -276,7 +278,7 @@ func Secret(secrets ...string) (secret string, err error) {
 
 func Issuer(issuer string) string {
 
-	prefix := facades.Cfg.GetString("app.name") + ":"
+	prefix := facades.Config().GetString("app.name") + ":"
 
 	if strings.HasPrefix(issuer, prefix) {
 		return issuer

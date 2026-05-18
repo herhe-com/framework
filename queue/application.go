@@ -54,9 +54,9 @@ func DefaultName() string {
 }
 
 func NewDriver(driver string, name string) (queue.Driver, error) {
-	cfg, _ := facades.Cfg.Get("queue.connections." + name).(map[string]any)
+	cfg, _ := facades.Config().Get("queue.connections." + name).(map[string]any)
 	if len(cfg) == 0 {
-		cfg, _ = facades.Cfg.Get("queue.rabbitmq." + name).(map[string]any)
+		cfg, _ = facades.Config().Get("queue.rabbitmq." + name).(map[string]any)
 	}
 	if driver == "" {
 		driver = queueconfig.Driver(name, "")
