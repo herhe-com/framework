@@ -171,7 +171,7 @@ func newMysqlClient(name string) (*gorm.DB, string, error) {
 		logMode = logger.Silent
 	}
 
-	dialectal := mysql.Open(dns(username, password, host, port, prefix, db, charset))
+	dialectal := mysql.Open(mysqlDSN(username, password, host, port, db, charset))
 
 	config := gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
