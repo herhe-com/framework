@@ -62,3 +62,16 @@ func TestResolveDatabaseDriverSupportsSQLServerDefaultConnection(t *testing.T) {
 		t.Fatalf("expected sqlserver driver, got %q", got)
 	}
 }
+
+func TestMysqlCharsetDefaultIsUtf8mb4(t *testing.T) {
+	original := facades.Container()
+	facades.SetContainer(&facades.Services{})
+	facades.Register[contractconfig.Application](fakeConfig{})
+	t.Cleanup(func() {
+		facades.SetContainer(original)
+	})
+
+	if got := mysqlCharset("default"); got != "utf8mb4" {
+		t.Fatalf("expected default mysql charset utf8mb4, got %q", got)
+	}
+}

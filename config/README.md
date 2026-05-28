@@ -65,7 +65,7 @@ func init() {
 					"host":     cfg.Env("database.orm.connections.default.host", "127.0.0.1"),
 					"port":     cfg.Env("database.orm.connections.default.port", "3306"),
 					"db":       cfg.Env("database.orm.connections.default.db", "upper"),
-					"charset":  cfg.Env("database.orm.connections.default.charset", "utf8mb4_unicode_ci"),
+					"charset":  cfg.Env("database.orm.connections.default.charset", "utf8mb4"),
 				},
 			},
 		},
@@ -110,7 +110,7 @@ database:
         host: 127.0.0.1
         port: "3306"
         db: upper
-        charset: utf8mb4_unicode_ci
+        charset: utf8mb4
         prefix: ""
         log_mode: error
   redis:

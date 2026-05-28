@@ -137,6 +137,10 @@ func ormConnectionString(name, field, defaultValue string) string {
 	return defaultValue
 }
 
+func mysqlCharset(name string) string {
+	return ormConnectionString(name, "charset", "utf8mb4")
+}
+
 func newMysqlClient(name string) (*gorm.DB, string, error) {
 
 	var username, password, host, port, prefix, db, charset string
@@ -151,7 +155,7 @@ func newMysqlClient(name string) (*gorm.DB, string, error) {
 	port = ormConnectionString(name, "port", "3306")
 	prefix = ormConnectionString(name, "prefix", "")
 	db = ormConnectionString(name, "db", "")
-	charset = ormConnectionString(name, "charset", "utf8mb4_unicode_ci")
+	charset = mysqlCharset(name)
 	log := ormConnectionString(name, "log_mode", "error")
 
 	if username == "" || password == "" || host == "" || db == "" {
