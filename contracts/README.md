@@ -109,9 +109,31 @@ type Queue interface {
 	Channel(channel string, name string) (Driver, error)
 }
 
+type Handler func(data []byte) error
+
+type Headers map[string]any
+
+type ProducerOptions struct {
+	Topic   string
+	Queue   string
+	Routes  []string
+	Delay   time.Duration
+	TTL     time.Duration
+	Headers Headers
+}
+
+type ConsumerOptions struct {
+	Topic   string
+	Queue   string
+	Route   string
+	Delayed bool
+	TTL     time.Duration
+	Retry   int
+}
+
 type Driver interface {
-	Producer(body []byte, exchange, queue string, routes []string, delay, ttl int64, headers ...rabbitmq.Table) error
-	Consumer(handler func(data []byte) error, exchange, queue, route string, delay bool, ttl int64, retry int) error
+	Producer(body []byte, options ProducerOptions) error
+	Consumer(handler Handler, options ConsumerOptions) error
 	Close() error
 }
 ```

@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
-	constnats "github.com/herhe-com/framework/contracts/queue"
+	contractqueue "github.com/herhe-com/framework/contracts/queue"
 	"github.com/spf13/viper"
 	"github.com/wagslane/go-rabbitmq"
 )
@@ -70,125 +71,116 @@ func (r *RabbitMQ) Conn() (*rabbitmq.Conn, error) {
 	return rabbitmq.NewConn(r.url(), options...)
 }
 
-func (r *RabbitMQ) Producer(data []byte, exchange, queue string, routes []string, delay, ttl int64, headers ...rabbitmq.Table) (err error) {
+func (r *RabbitMQ) Producer(data []byte, options contractqueue.ProducerOptions) (err error) {
 
-	if err = r.CheckQueue(queue); err != nil {
+	if err = r.CheckQueue(options.Queue); err != nil {
 		return err
 	}
 
 	var publisher *rabbitmq.Publisher
 
-	options := r.PublisherOptions(queue)
+	publisherOptions := r.PublisherOptions(options.Queue)
 
-	if delay > 0 {
-		options = append([]func(publisherOptions *rabbitmq.PublisherOptions){
+	if options.Delay > 0 {
+		publisherOptions = append([]func(publisherOptions *rabbitmq.PublisherOptions){
 			rabbitmq.WithPublisherOptionsExchangeKind("x-delayed-message"),
 			rabbitmq.WithPublisherOptionsExchangeDurable,
-		}, options...)
-	} else if ttl > 0 {
-		options = append([]func(publisherOptions *rabbitmq.PublisherOptions){
+		}, publisherOptions...)
+	} else if options.TTL > 0 {
+		publisherOptions = append([]func(publisherOptions *rabbitmq.PublisherOptions){
 			rabbitmq.WithPublisherOptionsExchangeDurable,
-		}, options...)
+		}, publisherOptions...)
 	}
 
-	options = append([]func(publisherOptions *rabbitmq.PublisherOptions){
-		rabbitmq.WithPublisherOptionsExchangeName(exchange),
+	publisherOptions = append([]func(publisherOptions *rabbitmq.PublisherOptions){
+		rabbitmq.WithPublisherOptionsExchangeName(options.Topic),
 		rabbitmq.WithPublisherOptionsExchangeDeclare,
-	}, options...)
+	}, publisherOptions...)
 
-	if publisher, err = rabbitmq.NewPublisher(r.conn, options...); err != nil {
+	if publisher, err = rabbitmq.NewPublisher(r.conn, publisherOptions...); err != nil {
 		return err
 	}
 
-	opts := r.PublishOptions(queue)
-	opts = append(opts, rabbitmq.WithPublishOptionsExchange(exchange))
+	opts := r.PublishOptions(options.Queue)
+	opts = append(opts, rabbitmq.WithPublishOptionsExchange(options.Topic))
+	if options.TTL > 0 {
+		opts = append(opts, rabbitmq.WithPublishOptionsExpiration(strconv.FormatInt(options.TTL.Milliseconds(), 10)))
+	}
 
 	header := rabbitmq.Table{}
 
-	if delay > 0 {
-		header["x-delay"] = delay * 1000
-	} else if ttl > 0 {
-		header["x-message-ttl"] = ttl * 1000
-		header["x-dead-letter-exchange"] = exchange
+	for key, value := range options.Headers {
+		header[key] = value
 	}
-
-	if len(headers) > 0 {
-		for _, value := range headers {
-			for k, v := range value {
-				header[k] = v
-			}
-		}
+	if options.Delay > 0 {
+		header[contractqueue.DelayHeader] = options.Delay.Milliseconds()
 	}
 
 	if len(header) > 0 {
 		opts = append(opts, rabbitmq.WithPublishOptionsHeaders(header))
 	}
 
-	return publisher.Publish(data, routes, opts...)
+	return publisher.Publish(data, options.Routes, opts...)
 }
 
-func (r *RabbitMQ) Consumer(handler func(data []byte) error, exchange, queue, route string, delay bool, ttl int64, retry int) (err error) {
+func (r *RabbitMQ) Consumer(handler contractqueue.Handler, options contractqueue.ConsumerOptions) (err error) {
 
-	if err = r.CheckQueue(queue); err != nil {
+	if err = r.CheckQueue(options.Queue); err != nil {
 		return err
 	}
 
-	options := r.ConsumerOptions(queue)
+	consumerOptions := r.ConsumerOptions(options.Queue)
 
-	if delay {
+	if options.Delayed {
 
-		options = append([]func(*rabbitmq.ConsumerOptions){
+		consumerOptions = append([]func(*rabbitmq.ConsumerOptions){
 			rabbitmq.WithConsumerOptionsExchangeArgs(rabbitmq.Table{
 				"x-delayed-type": "direct",
 			}),
 			rabbitmq.WithConsumerOptionsExchangeKind("x-delayed-message"),
 			rabbitmq.WithConsumerOptionsExchangeDurable,
-		}, options...)
-	} else if ttl > 0 {
+		}, consumerOptions...)
+	}
+	if options.TTL > 0 {
 
-		options = append([]func(*rabbitmq.ConsumerOptions){
+		consumerOptions = append([]func(*rabbitmq.ConsumerOptions){
 			rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
-				"x-message-ttl":          ttl * 1000,
-				"x-dead-letter-exchange": exchange,
+				"x-message-ttl":          options.TTL.Milliseconds(),
+				"x-dead-letter-exchange": options.Topic,
 			}),
 			rabbitmq.WithConsumerOptionsExchangeDurable,
-		}, options...)
+		}, consumerOptions...)
 	}
 
-	options = append([]func(*rabbitmq.ConsumerOptions){
-		rabbitmq.WithConsumerOptionsExchangeName(exchange),
-		rabbitmq.WithConsumerOptionsRoutingKey(route),
+	consumerOptions = append([]func(*rabbitmq.ConsumerOptions){
+		rabbitmq.WithConsumerOptionsExchangeName(options.Topic),
+		rabbitmq.WithConsumerOptionsRoutingKey(options.Route),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
 		rabbitmq.WithConsumerOptionsConcurrency(10),
-	}, options...)
+	}, consumerOptions...)
 
-	consumer, err := rabbitmq.NewConsumer(r.conn, queue, options...)
+	consumer, err := rabbitmq.NewConsumer(r.conn, options.Queue, consumerOptions...)
 
 	if err != nil {
 		return err
 	}
 
 	err = consumer.Run(func(d rabbitmq.Delivery) (action rabbitmq.Action) {
+		headers := contractqueue.Headers(d.Headers)
+		retried := contractqueue.RetryCount(headers)
 
-		retried := 0
+		if consumeErr := handler(d.Body); consumeErr != nil {
 
-		if retry > 0 {
-			retried, _ = d.Headers["x-retry"].(int)
-		}
-
-		var delayTTTL int64 = 0
-
-		if delay {
-			delayTTTL, _ = d.Headers["x-delay"].(int64)
-		}
-
-		if err = handler(d.Body); err != nil {
-
-			if retry > 0 && retried < retry {
-				d.Headers["x-retry"] = retried + 1
-
-				if err = r.Producer(d.Body, exchange, queue, []string{route}, delayTTTL, ttl); err != nil {
-					return rabbitmq.NackDiscard
+			if options.Retry > 0 && retried < options.Retry {
+				if retryErr := r.Producer(d.Body, contractqueue.ProducerOptions{
+					Topic:   options.Topic,
+					Queue:   options.Queue,
+					Routes:  []string{options.Route},
+					Delay:   contractqueue.RetryDelay(headers),
+					TTL:     options.TTL,
+					Headers: contractqueue.WithRetryCount(headers, retried+1),
+				}); retryErr != nil {
+					return rabbitmq.NackRequeue
 				}
 
 				return rabbitmq.Ack
@@ -200,19 +192,23 @@ func (r *RabbitMQ) Consumer(handler func(data []byte) error, exchange, queue, ro
 				q = "basic_error"
 			}
 
-			data := constnats.BasicError{
-				Exchange: exchange,
-				Queue:    queue,
-				Route:    route,
+			data := contractqueue.BasicError{
+				Exchange: options.Topic,
+				Queue:    options.Queue,
+				Route:    options.Route,
 				Retry:    retried,
 				Message:  string(d.Body),
-				Error:    err.Error(),
+				Error:    consumeErr.Error(),
 			}
 
 			body, _ := json.Marshal(data)
 
-			if err = r.Producer(body, q, q, []string{q}, 0, 0); err != nil {
-				return rabbitmq.NackDiscard
+			if publishErr := r.Producer(body, contractqueue.ProducerOptions{
+				Topic:  q,
+				Queue:  q,
+				Routes: []string{q},
+			}); publishErr != nil {
+				return rabbitmq.NackRequeue
 			}
 		}
 
