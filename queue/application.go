@@ -8,12 +8,26 @@ import (
 	"github.com/herhe-com/framework/contracts/queue"
 	"github.com/herhe-com/framework/facades"
 	queueconfig "github.com/herhe-com/framework/queue/config"
+	natsqueue "github.com/herhe-com/framework/queue/nats"
 	"github.com/herhe-com/framework/queue/rabbitmq"
 )
 
 const (
 	DriverRabbitmq string = "rabbitmq"
+	DriverNATS     string = "nats"
 )
+
+// Handler processes a queue message body.
+type Handler = queue.Handler
+
+// Headers contains transport-neutral message headers.
+type Headers = queue.Headers
+
+// ProducerOptions describes where and how a message is published.
+type ProducerOptions = queue.ProducerOptions
+
+// ConsumerOptions describes a queue subscription.
+type ConsumerOptions = queue.ConsumerOptions
 
 type Queue struct {
 	queue.Driver
@@ -54,10 +68,6 @@ func DefaultName() string {
 }
 
 func NewDriver(driver string, name string) (queue.Driver, error) {
-	cfg, _ := facades.Config().Get("queue.connections." + name).(map[string]any)
-	if len(cfg) == 0 {
-		cfg, _ = facades.Config().Get("queue.rabbitmq." + name).(map[string]any)
-	}
 	if driver == "" {
 		driver = queueconfig.Driver(name, "")
 	}
@@ -65,12 +75,19 @@ func NewDriver(driver string, name string) (queue.Driver, error) {
 		driver = DriverRabbitmq
 	}
 
+	cfg, _ := facades.Config().Get("queue.connections." + name).(map[string]any)
+	if len(cfg) == 0 {
+		cfg, _ = facades.Config().Get("queue." + driver + "." + name).(map[string]any)
+	}
+
 	switch driver {
 	case DriverRabbitmq:
 		return rabbitmq.NewRabbitMQ(cfg)
+	case DriverNATS:
+		return natsqueue.NewNATS(cfg)
 	}
 
-	return nil, fmt.Errorf("invalid driver: %s, only support RabbitMQ", driver)
+	return nil, fmt.Errorf("invalid driver: %s, only support RabbitMQ and NATS", driver)
 }
 
 func (r *Queue) Channel(driver string, name string) (queue.Driver, error) {

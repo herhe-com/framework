@@ -29,6 +29,7 @@ require (
 	github.com/hertz-contrib/swagger v0.1.1
 	github.com/meilisearch/meilisearch-go v0.36.3
 	github.com/minio/minio-go/v7 v7.2.1
+	github.com/nats-io/nats.go v1.52.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/pterm/pterm v0.12.83
 	github.com/qiniu/go-sdk/v7 v7.26.17
@@ -137,6 +138,8 @@ require (
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/nats-io/nkeys v0.4.16 // indirect
+	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/petermattis/goid v0.0.0-20260716134002-a9b348f0a2b9 // indirect

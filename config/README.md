@@ -145,6 +145,14 @@ queue:
       username: guest
       password: guest
       vhost: /
+    events:
+      driver: nats
+      url: nats://127.0.0.1:4222
+      name: framework-queue
+      error: basic_error
+      stream: FRAMEWORK_QUEUE
+      schedule_prefix: _framework.queue.schedule
+      retention: 1h
 
 search:
   default: default

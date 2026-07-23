@@ -13,8 +13,10 @@ func Driver(name, defaultValue string) string {
 		return driver
 	}
 
-	if driver := facades.Config().GetString("queue.rabbitmq." + name + ".driver"); driver != "" {
-		return driver
+	for _, driver := range []string{"rabbitmq", "nats"} {
+		if value := facades.Config().GetString("queue." + driver + "." + name + ".driver"); value != "" {
+			return value
+		}
 	}
 
 	return defaultValue
@@ -26,8 +28,10 @@ func ConnectionString(name, field, defaultValue string) string {
 		return value
 	}
 
-	if value := facades.Config().GetString("queue.rabbitmq." + name + "." + field); value != "" {
-		return value
+	for _, driver := range []string{"rabbitmq", "nats"} {
+		if value := facades.Config().GetString("queue." + driver + "." + name + "." + field); value != "" {
+			return value
+		}
 	}
 
 	return defaultValue
