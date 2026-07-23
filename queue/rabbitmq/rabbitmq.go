@@ -64,7 +64,7 @@ func (r *RabbitMQ) url() string {
 func (r *RabbitMQ) Conn() (*rabbitmq.Conn, error) {
 
 	options := []func(options *rabbitmq.ConnectionOptions){
-		rabbitmq.WithConnectionOptionsReconnectInterval(3 * time.Second),
+		rabbitmq.WithConnectionOptionsBaseReconnectInterval(3 * time.Second),
 	}
 
 	return rabbitmq.NewConn(r.url(), options...)
