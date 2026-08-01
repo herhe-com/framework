@@ -112,3 +112,17 @@ func Fail(ctx *app.RequestContext, message string, a ...any) {
 		Message: msg,
 	})
 }
+
+func Custom(ctx *app.RequestContext, code int, message string, a ...any) {
+
+	msg := message
+
+	if len(a) > 0 {
+		msg = fmt.Sprintf(message, a...)
+	}
+
+	ctx.JSON(http.StatusOK, response.Response[any]{
+		Code:    code,
+		Message: msg,
+	})
+}
