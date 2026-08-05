@@ -2,7 +2,6 @@ package auth
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/herhe-com/framework/contracts/auth"
@@ -10,41 +9,31 @@ import (
 	"github.com/samber/lo"
 )
 
+func permissionFunc() (auth.PermissionFunc, error) {
+
+	permissions, ok := facades.Config().Get("auth.permissions").(func() []auth.Permission)
+
+	if !ok || permissions == nil {
+		return nil, errors.New("the value of auth.permissions must be a permission function")
+	}
+
+	return permissions, nil
+}
+
 func toTrees() error {
 
-	var trees []auth.Tree
+	if _, err := permissionFunc(); err != nil {
+		return err
+	}
 
-	permissions, ok := facades.Config().Get("auth.permissions").([]auth.Permission)
+	platforms, _ := facades.Config().Get("auth.platforms", []uint16{CodeOfPlatform}).([]uint16)
 
-	if ok {
+	mark := lo.CountBy(platforms, func(item uint16) bool {
+		return !lo.Contains([]uint16{CodeOfPlatform, CodeOfClique, CodeOfRegion, CodeOfStore}, item)
+	})
 
-		var prefix []string
-
-		platforms, _ := facades.Config().Get("auth.platforms", []uint16{CodeOfStore}).([]uint16)
-
-		mark := lo.CountBy(platforms, func(item uint16) bool {
-			return !lo.Contains([]uint16{CodeOfPlatform, CodeOfClique, CodeOfStore}, item)
-		})
-
-		if mark > 0 {
-			return errors.New("platform configuration failed")
-		}
-
-		platforms = append(platforms, CodeOfRegion)
-
-		trees = doTrees(permissions, prefix, platforms)
-
-		if len(trees) > 0 {
-
-			for _, platform := range platforms {
-
-				key := fmt.Sprintf("%s.module.%d", "auth", platform)
-
-				facades.Config().Set(key, doModules(trees, platform))
-			}
-		}
-
-		facades.Config().Set("auth.trees", trees)
+	if mark > 0 {
+		return errors.New("platform configuration failed")
 	}
 
 	return nil
@@ -52,7 +41,10 @@ func toTrees() error {
 
 func Trees(platform uint16, ep bool, permissions ...[]string) []auth.Tree {
 
-	all, _ := facades.Config().Get("auth.trees").([]auth.Tree)
+	permissionFunc, err := permissionFunc()
+	if err != nil {
+		return nil
+	}
 
 	var permission []string
 
@@ -60,16 +52,28 @@ func Trees(platform uint16, ep bool, permissions ...[]string) []auth.Tree {
 		permission = permissions[0]
 	}
 
-	return filter(all, platform, permission, ep)
+	var trees []auth.Tree
+
+	platforms, _ := facades.Config().Get("auth.platforms", []uint16{CodeOfPlatform}).([]uint16)
+
+	trees = doTrees(permissionFunc(), nil, platforms)
+
+	return filter(trees, platform, permission, ep)
 }
 
 func Modules(platform uint16) []auth.Module {
 
-	key := fmt.Sprintf("%s.module.%d", "auth", platform)
+	permissionFunc, err := permissionFunc()
 
-	modules, _ := facades.Config().Get(key).([]auth.Module)
+	if err != nil {
+		return nil
+	}
 
-	return modules
+	platforms, _ := facades.Config().Get("auth.platforms", []uint16{CodeOfPlatform}).([]uint16)
+
+	trees := doTrees(permissionFunc(), nil, platforms)
+
+	return doModules(trees, platform)
 }
 
 // filter

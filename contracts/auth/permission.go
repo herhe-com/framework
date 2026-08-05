@@ -1,5 +1,10 @@
 package auth
 
+// PermissionFunc returns the permission list.
+// Configure it through the "auth.permissions" key. It is invoked on each
+// Trees and Modules call, so the tree is rebuilt on demand to relieve config memory.
+type PermissionFunc func() []Permission
+
 type Module struct {
 	Code        string   `json:"code"`
 	Name        string   `json:"name"`
