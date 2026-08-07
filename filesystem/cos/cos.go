@@ -31,6 +31,9 @@ import (
 type COS struct {
 	ctx      context.Context
 	instance *s3.Client
+	access   string
+	secret   string
+	region   string
 	bucket   string
 	domain   string
 }
@@ -75,9 +78,33 @@ func NewCOS(ctx context.Context, configs map[string]any) (*COS, error) {
 		instance: s3.NewFromConfig(opt, func(options *s3.Options) {
 			options.UsePathStyle = false
 		}),
+		access: access,
+		secret: secret,
+		region: region,
 		bucket: bucket,
 		domain: domain,
 	}, nil
+}
+
+func client(ctx context.Context, access, secret, region, endpoint string) (*s3.Client, error) {
+
+	opt, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(region),
+		config.WithBaseEndpoint(endpoint),
+		config.WithCredentialsProvider(credentials.StaticCredentialsProvider{
+			Value: aws.Credentials{
+				AccessKeyID: access, SecretAccessKey: secret,
+			},
+		}),
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("init cos disk error: %v", err)
+	}
+
+	return s3.NewFromConfig(opt, func(options *s3.Options) {
+		options.UsePathStyle = false
+	}), nil
 }
 
 func (r *COS) Dirs(path string) (dirs []filesystem.Pathname, err error) {
@@ -316,7 +343,13 @@ func (r *COS) Size(file string) (int64, error) {
 func (r *COS) TemporaryUrl(file string, timer time.Duration) (string, error) {
 	file = strings.TrimPrefix(file, "/")
 
-	presignClient := s3.NewPresignClient(r.instance)
+	instance, err := client(r.ctx, r.access, r.secret, r.region, r.domain)
+
+	if err != nil {
+		return "", err
+	}
+
+	presignClient := s3.NewPresignClient(instance)
 
 	request, err := presignClient.PresignGetObject(r.ctx, &s3.GetObjectInput{
 		Bucket: aws.String(r.bucket),

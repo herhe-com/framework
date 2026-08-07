@@ -28,6 +28,10 @@ import (
 type Minio struct {
 	ctx      context.Context
 	instance *minio.Client
+	key      string
+	secret   string
+	region   string
+	ssl      bool
 	bucket   string
 	disk     string
 	domain   string
@@ -64,6 +68,10 @@ func NewMinio(ctx context.Context, configs map[string]any) (*Minio, error) {
 	return &Minio{
 		ctx:      ctx,
 		instance: client,
+		key:      key,
+		secret:   secret,
+		region:   region,
+		ssl:      ssl,
 		bucket:   bucket,
 		domain:   domain,
 	}, nil
@@ -283,8 +291,21 @@ func (r *Minio) Size(file string) (int64, error) {
 
 func (r *Minio) TemporaryUrl(file string, timer time.Duration) (string, error) {
 	file = strings.TrimPrefix(file, "/")
+
+	endpoint := strings.TrimPrefix(r.domain, "http://")
+	endpoint = strings.TrimPrefix(endpoint, "https://")
+
+	instance, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(r.key, r.secret, ""),
+		Secure: r.ssl,
+		Region: r.region,
+	})
+	if err != nil {
+		return "", err
+	}
+
 	reqParams := make(url.Values)
-	resignedURL, err := r.instance.PresignedGetObject(r.ctx, r.bucket, file, timer, reqParams)
+	resignedURL, err := instance.PresignedGetObject(r.ctx, r.bucket, file, timer, reqParams)
 	if err != nil {
 		return "", err
 	}

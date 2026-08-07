@@ -311,7 +311,7 @@ func (r *Qiniu) TemporaryUrl(key string, timer time.Duration) (url string, err e
 
 	deadline := time.Now().Add(timer).Unix()
 
-	if url, err = cdn.CreateTimestampAntileechURL(key, cryptKey, deadline); err != nil {
+	if url, err = cdn.CreateTimestampAntileechURL(r.Url(key), cryptKey, deadline); err != nil {
 		return "", err
 	}
 

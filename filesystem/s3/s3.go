@@ -30,8 +30,12 @@ import (
 type S3 struct {
 	ctx      context.Context
 	instance *s3.Client
-	bucket   string
 	disk     string
+	access   string
+	secret   string
+	region   string
+	bucket   string
+	endpoint string
 	domain   string
 }
 
@@ -52,6 +56,26 @@ func NewS3(ctx context.Context, configs map[string]any) (*S3, error) {
 		region = "us-east-1"
 	}
 
+	instance, err := client(ctx, access, secret, region, endpoint)
+
+	if err != nil {
+		return nil, fmt.Errorf("init s3 disk error: %v", err)
+	}
+
+	return &S3{
+		ctx:      ctx,
+		instance: instance,
+		access:   access,
+		secret:   secret,
+		region:   region,
+		bucket:   bucket,
+		endpoint: endpoint,
+		domain:   domain,
+	}, nil
+}
+
+func client(ctx context.Context, access, secret, region, endpoint string) (*s3.Client, error) {
+
 	opt, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(region),
 		config.WithBaseEndpoint(endpoint),
@@ -66,14 +90,9 @@ func NewS3(ctx context.Context, configs map[string]any) (*S3, error) {
 		return nil, fmt.Errorf("init s3 disk error: %v", err)
 	}
 
-	return &S3{
-		ctx: ctx,
-		instance: s3.NewFromConfig(opt, func(options *s3.Options) {
-			options.UsePathStyle = true
-		}),
-		bucket: bucket,
-		domain: domain,
-	}, nil
+	return s3.NewFromConfig(opt, func(options *s3.Options) {
+		options.UsePathStyle = true
+	}), nil
 }
 
 func (r *S3) Dirs(path string) (dirs []filesystem.Pathname, err error) {
@@ -312,7 +331,13 @@ func (r *S3) Size(file string) (int64, error) {
 func (r *S3) TemporaryUrl(file string, timer time.Duration) (string, error) {
 	file = strings.TrimPrefix(file, "/")
 
-	presignClient := s3.NewPresignClient(r.instance)
+	instance, err := client(r.ctx, r.access, r.secret, r.region, r.domain)
+
+	if err != nil {
+		return "", err
+	}
+
+	presignClient := s3.NewPresignClient(instance)
 
 	request, err := presignClient.PresignGetObject(r.ctx, &s3.GetObjectInput{
 		Bucket: aws.String(r.bucket),

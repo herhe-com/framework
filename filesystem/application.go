@@ -26,8 +26,8 @@ const (
 
 type Storage struct {
 	filesystem.Driver
-	mu      sync.RWMutex
-	drivers map[string]filesystem.Driver
+	mu    sync.RWMutex
+	disks map[string]filesystem.Driver
 }
 
 func NewStorage() *Storage {
@@ -43,13 +43,8 @@ func NewStorage() *Storage {
 // NewStorageWithError creates the filesystem storage application and returns initialization errors.
 func NewStorageWithError() (*Storage, error) {
 	defaultDisk := DefaultDisk()
-	defaultDriver := filesystemconfig.Driver(defaultDisk, facades.Config().GetString("filesystem.driver"))
 
-	if defaultDriver == "" {
-		return nil, fmt.Errorf("please set default driver")
-	}
-
-	driver, err := NewDriver(defaultDriver, defaultDisk)
+	driver, err := NewDriver(defaultDisk)
 
 	if err != nil {
 		return nil, err
@@ -59,8 +54,8 @@ func NewStorageWithError() (*Storage, error) {
 	drivers[defaultDisk] = driver
 
 	return &Storage{
-		drivers: drivers,
-		Driver:  driver,
+		disks:  drivers,
+		Driver: driver,
 	}, nil
 }
 
@@ -69,13 +64,16 @@ func DefaultDisk() string {
 	return filesystemconfig.DefaultDisk()
 }
 
-func NewDriver(driver string, disk string) (filesystem.Driver, error) {
+// NewDriver creates a filesystem driver from the given disk's configuration.
+func NewDriver(disk string) (filesystem.Driver, error) {
 
 	ctx := context.Background()
 	configKey := fmt.Sprintf("filesystem.disks.%s", disk)
 	cfg, _ := facades.Config().Get(configKey).(map[string]any)
-	if cfgDriver, ok := cfg["driver"].(string); ok && cfgDriver != "" {
-		driver = cfgDriver
+
+	driver, ok := cfg["driver"].(string)
+	if !ok || driver == "" {
+		return nil, fmt.Errorf("please set driver for disk: %s", disk)
 	}
 
 	switch driver {
@@ -94,12 +92,10 @@ func NewDriver(driver string, disk string) (filesystem.Driver, error) {
 	return nil, fmt.Errorf("invalid driver: %s, only support oss, cos, s3, minio, qiniu", driver)
 }
 
-func (r *Storage) Disk(driver string, disk string) (filesystem.Driver, error) {
-
-	key := disk
+func (r *Storage) Disk(disk string) (filesystem.Driver, error) {
 
 	r.mu.RLock()
-	if dri, exist := r.drivers[key]; exist {
+	if dri, exist := r.disks[disk]; exist {
 		r.mu.RUnlock()
 		return dri, nil
 	}
@@ -108,16 +104,16 @@ func (r *Storage) Disk(driver string, disk string) (filesystem.Driver, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if dri, exist := r.drivers[key]; exist {
+	if dri, exist := r.disks[disk]; exist {
 		return dri, nil
 	}
 
-	dri, err := NewDriver(driver, disk)
+	dri, err := NewDriver(disk)
 	if err != nil {
 		return nil, err
 	}
 
-	r.drivers[key] = dri
+	r.disks[disk] = dri
 
 	return dri, nil
 }

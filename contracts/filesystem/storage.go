@@ -7,7 +7,7 @@ import (
 
 type Storage interface {
 	Driver
-	Disk(driver string, disk string) (Driver, error)
+	Disk(disk string) (Driver, error)
 }
 
 type Driver interface {
