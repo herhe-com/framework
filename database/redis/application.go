@@ -3,10 +3,12 @@ package redis
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 
 	"github.com/gookit/color"
 	redisconfig "github.com/herhe-com/framework/database/redis/config"
+	"github.com/herhe-com/framework/facades"
 	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/maintnotifications"
 )
@@ -68,8 +70,15 @@ func newRedisClient(name string) (*redis.Client, string, error) {
 	var db int
 	var username, password, host, port string
 
-	if configDriver := redisconfig.Driver(name, DriverRedis); configDriver != DriverRedis {
-		return nil, "", errors.New("invalid database config: redis driver")
+	configKey := fmt.Sprintf("database.redis.connections.%s", name)
+	cfg, _ := facades.Config().Get(configKey).(map[string]any)
+
+	driver, ok := cfg["driver"].(string)
+	if !ok || driver == "" {
+		return nil, "", fmt.Errorf("please set driver for connection: %s", name)
+	}
+	if driver != DriverRedis {
+		return nil, "", fmt.Errorf("invalid driver: %s, only support %s", driver, DriverRedis)
 	}
 
 	username = redisconfig.ConnectionString(name, "username", "")
@@ -79,7 +88,7 @@ func newRedisClient(name string) (*redis.Client, string, error) {
 	db = redisconfig.ConnectionInt(name, "db", 1)
 
 	if host == "" {
-		return nil, "", errors.New("invalid database config: mysql")
+		return nil, "", errors.New("invalid database config: redis")
 	}
 
 	addr := net.JoinHostPort(host, port)

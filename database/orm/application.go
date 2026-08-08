@@ -31,9 +31,7 @@ type Database struct {
 
 func NewApplication() (*Database, error) {
 	defaultName := DefaultName()
-	defaultDriver := resolveDatabaseDriver("", defaultName)
-
-	driver, name, err := NewDriver("", defaultName)
+	driver, err := NewDriver(defaultName)
 
 	if err != nil {
 		color.Errorf("[database] %s", err)
@@ -41,7 +39,7 @@ func NewApplication() (*Database, error) {
 	}
 
 	drivers := make(map[string]*gorm.DB)
-	drivers[defaultDriver+":"+name] = driver
+	drivers[defaultName] = driver
 
 	return &Database{
 		drivers: drivers,
@@ -59,21 +57,29 @@ func DefaultDriver() string {
 	return DriverOf(DefaultName())
 }
 
-func NewDriver(driver string, name string) (*gorm.DB, string, error) {
-	driver = resolveDatabaseDriver(driver, name)
+// NewDriver creates an ORM driver from the given connection's configuration.
+func NewDriver(name string) (*gorm.DB, error) {
+	driver := DriverOf(name)
+	if driver == "" {
+		return nil, fmt.Errorf("please set driver for connection: %s", name)
+	}
 
 	switch driver {
 	case DriverMySQL:
-		return newMysqlClient(name)
+		db, _, err := newMysqlClient(name)
+		return db, err
 	case DriverSQLite:
-		return newSQLiteClient(name)
+		db, _, err := newSQLiteClient(name)
+		return db, err
 	case DriverPostgreSQL:
-		return newPostgreSQLClient(name)
+		db, _, err := newPostgreSQLClient(name)
+		return db, err
 	case DriverSQLServer:
-		return newSQLServerClient(name)
+		db, _, err := newSQLServerClient(name)
+		return db, err
 	}
 
-	return nil, "", fmt.Errorf("invalid driver: %s", driver)
+	return nil, fmt.Errorf("invalid driver: %s", driver)
 }
 
 func defaultDatabaseName() string {
@@ -82,55 +88,23 @@ func defaultDatabaseName() string {
 
 // DriverOf returns the driver configured for the given ORM connection name.
 func DriverOf(name string) string {
-	if driver := ormConnectionString(name, "driver", ""); driver != "" {
-		return driver
-	}
+	configKey := fmt.Sprintf("database.orm.connections.%s", name)
+	cfg, _ := facades.Config().Get(configKey).(map[string]any)
+	driver, _ := cfg["driver"].(string)
 
-	if name == DefaultName() {
-		return facades.Config().GetString("database.driver")
-	}
-
-	return ""
+	return driver
 }
 
 func ConnectionPrefix(name string) string {
 	return ormConnectionString(name, "prefix", "")
 }
 
-func resolveDatabaseDriver(driver, name string) string {
-	if driver != "" {
-		return driver
-	}
-
-	if value := DriverOf(name); value != "" {
-		return value
-	}
-
-	if name == DefaultName() {
-		for _, candidate := range []string{DriverMySQL, DriverPostgreSQL, DriverSQLServer, DriverSQLite} {
-			if facades.Config().GetString("database."+candidate+".default.driver") != "" {
-				return candidate
-			}
-		}
-	}
-
-	return driver
-}
-
 func ormConnectionKey(name, field string) string {
 	return "database.orm.connections." + name + "." + field
 }
 
-func legacyORMConnectionKey(name, field string) string {
-	return "database.orm." + name + "." + field
-}
-
 func ormConnectionString(name, field, defaultValue string) string {
 	if value := facades.Config().GetString(ormConnectionKey(name, field)); value != "" {
-		return value
-	}
-
-	if value := facades.Config().GetString(legacyORMConnectionKey(name, field)); value != "" {
 		return value
 	}
 
@@ -204,7 +178,7 @@ func newSQLiteClient(name string) (*gorm.DB, string, error) {
 		return nil, "", fmt.Errorf("invalid database config: sqlite driver %s", configDriver)
 	}
 
-	db := ormConnectionString(name, "path", facades.Config().GetString("database.sqlite."+name, "default.db"))
+	db := ormConnectionString(name, "path", "default.db")
 
 	path := facades.Root() + db
 
@@ -352,18 +326,9 @@ func newSQLServerClient(name string) (*gorm.DB, string, error) {
 	return open, name, nil
 }
 
-func (r *Database) Drivers(driver string, names ...string) (*gorm.DB, error) {
-
-	name := "default"
-
-	if len(names) > 0 {
-		name = names[0]
-	}
-
-	key := driver + ":" + name
-
+func (r *Database) Drivers(name string) (*gorm.DB, error) {
 	r.mu.RLock()
-	if dri, exist := r.drivers[key]; exist {
+	if dri, exist := r.drivers[name]; exist {
 		r.mu.RUnlock()
 		return dri, nil
 	}
@@ -372,17 +337,17 @@ func (r *Database) Drivers(driver string, names ...string) (*gorm.DB, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if dri, exist := r.drivers[key]; exist {
+	if dri, exist := r.drivers[name]; exist {
 		return dri, nil
 	}
 
-	dri, _, err := NewDriver(driver, name)
+	dri, err := NewDriver(name)
 
 	if err != nil {
 		return nil, err
 	}
 
-	r.drivers[key] = dri
+	r.drivers[name] = dri
 
 	return dri, nil
 }

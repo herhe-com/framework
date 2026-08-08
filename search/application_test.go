@@ -104,11 +104,15 @@ func TestSearchChannelCanBeLoadedConcurrently(t *testing.T) {
 	facades.SetContainer(&facades.Services{})
 	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
-			"search.default":                      "default",
-			"search.connections.default.driver":   DriverMeiliSearch,
-			"search.connections.default.host":     "http://127.0.0.1:7700",
-			"search.connections.default.secret":   "masterKey",
-			"search.connections.secondary.driver": DriverMeiliSearch,
+			"search.default": "default",
+			"search.connections.default": map[string]any{
+				"driver": DriverMeiliSearch,
+			},
+			"search.connections.default.host":   "http://127.0.0.1:7700",
+			"search.connections.default.secret": "masterKey",
+			"search.connections.secondary": map[string]any{
+				"driver": DriverMeiliSearch,
+			},
 			"search.connections.secondary.host":   "http://127.0.0.1:7700",
 			"search.connections.secondary.secret": "masterKey",
 			"search.connections.secondary.prefix": "test_",
@@ -130,7 +134,7 @@ func TestSearchChannelCanBeLoadedConcurrently(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			if _, err := app.Channel(DriverMeiliSearch, "secondary"); err != nil {
+			if _, err := app.Channel("secondary"); err != nil {
 				t.Errorf("expected driver, got error: %v", err)
 			}
 		}()

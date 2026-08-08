@@ -5,5 +5,5 @@ import "gorm.io/gorm"
 type DB interface {
 	Default() *gorm.DB
 
-	Drivers(driver string, names ...string) (*gorm.DB, error)
+	Drivers(name string) (*gorm.DB, error)
 }

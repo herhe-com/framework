@@ -104,7 +104,7 @@ func headerInt64(headers Headers, key string) (int64, bool) {
 
 type Queue interface {
 	Driver
-	Channel(channel string, name string) (Driver, error)
+	Channel(name string) (Driver, error)
 }
 
 type Driver interface {

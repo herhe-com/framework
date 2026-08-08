@@ -31,7 +31,7 @@ func NewSearch() *Search {
 // NewSearchWithError creates the search application and returns initialization errors.
 func NewSearchWithError() (*Search, error) {
 	defaultName := DefaultName()
-	driver, err := NewDriver("", defaultName)
+	driver, err := NewDriver(defaultName)
 
 	if err != nil {
 		return nil, err
@@ -51,9 +51,14 @@ func DefaultName() string {
 	return facades.Config().GetString("search.default", "default")
 }
 
-func NewDriver(driver string, name string) (contractsearch.Driver, error) {
-	if driver == "" {
-		driver = searchconfig.Driver(name, "")
+// NewDriver creates a search driver from the given connection's configuration.
+func NewDriver(name string) (contractsearch.Driver, error) {
+	configKey := fmt.Sprintf("search.connections.%s", name)
+	cfg, _ := facades.Config().Get(configKey).(map[string]any)
+
+	driver, ok := cfg["driver"].(string)
+	if !ok || driver == "" {
+		return nil, fmt.Errorf("please set driver for connection: %s", name)
 	}
 
 	switch driver {
@@ -76,12 +81,9 @@ func ConnectionStrings(name, field string, defaultValue []string) []string {
 	return searchconfig.ConnectionStrings(name, field, defaultValue)
 }
 
-func (r *Search) Channel(driver string, name string) (contractsearch.Driver, error) {
-
-	key := name
-
+func (r *Search) Channel(name string) (contractsearch.Driver, error) {
 	r.mu.RLock()
-	if dri, exist := r.drivers[key]; exist {
+	if dri, exist := r.drivers[name]; exist {
 		r.mu.RUnlock()
 		return dri, nil
 	}
@@ -90,16 +92,16 @@ func (r *Search) Channel(driver string, name string) (contractsearch.Driver, err
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if dri, exist := r.drivers[key]; exist {
+	if dri, exist := r.drivers[name]; exist {
 		return dri, nil
 	}
 
-	dri, err := NewDriver(driver, name)
+	dri, err := NewDriver(name)
 	if err != nil {
 		return nil, err
 	}
 
-	r.drivers[key] = dri
+	r.drivers[name] = dri
 
 	return dri, nil
 }

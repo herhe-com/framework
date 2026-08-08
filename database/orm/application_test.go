@@ -14,11 +14,15 @@ func TestDatabaseDriversCanBeLoadedConcurrently(t *testing.T) {
 	facades.Register[facades.RootPath](facades.RootPath(t.TempDir() + "/"))
 	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
-			"database.orm.default":                    "default",
-			"database.orm.connections.default.driver": DriverSQLite,
-			"database.orm.connections.default.path":   "default.db",
-			"database.orm.connections.report.driver":  DriverSQLite,
-			"database.orm.connections.report.path":    "report.db",
+			"database.orm.default": "default",
+			"database.orm.connections.default": map[string]any{
+				"driver": DriverSQLite,
+			},
+			"database.orm.connections.default.path": "default.db",
+			"database.orm.connections.report": map[string]any{
+				"driver": DriverSQLite,
+			},
+			"database.orm.connections.report.path": "report.db",
 		},
 	})
 	t.Cleanup(func() {
@@ -36,7 +40,7 @@ func TestDatabaseDriversCanBeLoadedConcurrently(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			if _, err := db.Drivers(DriverSQLite, "report"); err != nil {
+			if _, err := db.Drivers("report"); err != nil {
 				t.Errorf("expected driver, got error: %v", err)
 			}
 		}()
@@ -45,20 +49,22 @@ func TestDatabaseDriversCanBeLoadedConcurrently(t *testing.T) {
 	wg.Wait()
 }
 
-func TestResolveDatabaseDriverSupportsSQLServerDefaultConnection(t *testing.T) {
+func TestDriverOfReadsSQLServerDefaultConnection(t *testing.T) {
 	original := facades.Container()
 	facades.SetContainer(&facades.Services{})
 	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
-			"database.orm.default":                    "default",
-			"database.orm.connections.default.driver": DriverSQLServer,
+			"database.orm.default": "default",
+			"database.orm.connections.default": map[string]any{
+				"driver": DriverSQLServer,
+			},
 		},
 	})
 	t.Cleanup(func() {
 		facades.SetContainer(original)
 	})
 
-	if got := resolveDatabaseDriver("", "default"); got != DriverSQLServer {
+	if got := DriverOf("default"); got != DriverSQLServer {
 		t.Fatalf("expected sqlserver driver, got %q", got)
 	}
 }

@@ -110,7 +110,7 @@ func (that *MigrationProvider) prepare(cmd *cobra.Command) bool {
 		return false
 	}
 
-	db, err := facades.Database().Drivers(driver, connectionName)
+	db, err := facades.Database().Drivers(connectionName)
 	if err != nil {
 		color.Errorln("\n\n数据库获取失败：%v\n\n", err)
 		return false

@@ -2,7 +2,7 @@ package search
 
 type Search interface {
 	Driver
-	Channel(driver string, name string) (Driver, error)
+	Channel(name string) (Driver, error)
 }
 
 type Driver interface {

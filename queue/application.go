@@ -48,7 +48,7 @@ func NewQueue() *Queue {
 // NewQueueWithError creates the queue application and returns initialization errors.
 func NewQueueWithError() (*Queue, error) {
 	defaultName := DefaultName()
-	driver, err := NewDriver("", defaultName)
+	driver, err := NewDriver(defaultName)
 	if err != nil {
 		return nil, err
 	}
@@ -67,17 +67,14 @@ func DefaultName() string {
 	return queueconfig.DefaultName()
 }
 
-func NewDriver(driver string, name string) (queue.Driver, error) {
-	if driver == "" {
-		driver = queueconfig.Driver(name, "")
-	}
-	if driver == "" {
-		driver = DriverRabbitmq
-	}
+// NewDriver creates a queue driver from the given connection's configuration.
+func NewDriver(name string) (queue.Driver, error) {
+	configKey := fmt.Sprintf("queue.connections.%s", name)
+	cfg, _ := facades.Config().Get(configKey).(map[string]any)
 
-	cfg, _ := facades.Config().Get("queue.connections." + name).(map[string]any)
-	if len(cfg) == 0 {
-		cfg, _ = facades.Config().Get("queue." + driver + "." + name).(map[string]any)
+	driver, ok := cfg["driver"].(string)
+	if !ok || driver == "" {
+		return nil, fmt.Errorf("please set driver for connection: %s", name)
 	}
 
 	switch driver {
@@ -90,12 +87,9 @@ func NewDriver(driver string, name string) (queue.Driver, error) {
 	return nil, fmt.Errorf("invalid driver: %s, only support RabbitMQ and NATS", driver)
 }
 
-func (r *Queue) Channel(driver string, name string) (queue.Driver, error) {
-
-	key := name
-
+func (r *Queue) Channel(name string) (queue.Driver, error) {
 	r.mu.RLock()
-	if dri, exist := r.drivers[key]; exist {
+	if dri, exist := r.drivers[name]; exist {
 		r.mu.RUnlock()
 		return dri, nil
 	}
@@ -104,16 +98,16 @@ func (r *Queue) Channel(driver string, name string) (queue.Driver, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if dri, exist := r.drivers[key]; exist {
+	if dri, exist := r.drivers[name]; exist {
 		return dri, nil
 	}
 
-	dri, err := NewDriver(driver, name)
+	dri, err := NewDriver(name)
 	if err != nil {
 		return nil, err
 	}
 
-	r.drivers[key] = dri
+	r.drivers[name] = dri
 
 	return dri, nil
 }

@@ -1,4 +1,4 @@
-package queue
+package redis
 
 import (
 	"fmt"
@@ -45,22 +45,42 @@ func (f fakeConfig) GetString(key string, defaultValue ...string) string {
 }
 
 func (f fakeConfig) GetStrings(key string, defaultValue ...[]string) []string {
+	if len(defaultValue) > 0 {
+		return defaultValue[0]
+	}
+
 	return nil
 }
 
 func (f fakeConfig) GetMaps(key string, defaultValue ...map[string]any) map[string]any {
+	if len(defaultValue) > 0 {
+		return defaultValue[0]
+	}
+
 	return nil
 }
 
 func (f fakeConfig) GetInt(key string, defaultValue ...int) int {
+	if len(defaultValue) > 0 {
+		return defaultValue[0]
+	}
+
 	return 0
 }
 
 func (f fakeConfig) GetInt64(key string, defaultValue ...int64) int64 {
+	if len(defaultValue) > 0 {
+		return defaultValue[0]
+	}
+
 	return 0
 }
 
 func (f fakeConfig) GetBool(key string, defaultValue ...bool) bool {
+	if len(defaultValue) > 0 {
+		return defaultValue[0]
+	}
+
 	return false
 }
 
@@ -69,13 +89,12 @@ func (f fakeConfig) IsSet(key string) bool {
 	return ok
 }
 
-func TestNewQueueWithErrorReturnsConfigError(t *testing.T) {
+func TestNewRedisClientReadsDriverFromConnectionConfig(t *testing.T) {
 	original := facades.Container()
 	facades.SetContainer(&facades.Services{})
 	facades.Register[contractconfig.Application](fakeConfig{
 		values: map[string]any{
-			"queue.default": "default",
-			"queue.connections.default": map[string]any{
+			"database.redis.connections.default": map[string]any{
 				"driver": "unsupported",
 			},
 		},
@@ -84,12 +103,12 @@ func TestNewQueueWithErrorReturnsConfigError(t *testing.T) {
 		facades.SetContainer(original)
 	})
 
-	queue, err := NewQueueWithError()
+	_, _, err := newRedisClient("default")
 	if err == nil {
-		t.Fatal("expected invalid default queue driver to return an error")
+		t.Fatal("expected invalid redis driver to return an error")
 	}
 
-	if queue != nil {
-		t.Fatal("expected queue to be nil when initialization fails")
+	if got, want := err.Error(), "invalid driver: unsupported, only support redis"; got != want {
+		t.Fatalf("expected %q, got %q", want, got)
 	}
 }
