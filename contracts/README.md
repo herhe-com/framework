@@ -54,7 +54,7 @@ type Application interface {
 ```go
 type DB interface {
 	Default() *gorm.DB
-	Drivers(driver string, names ...string) (*gorm.DB, error)
+	Drivers(name string) (*gorm.DB, error)
 }
 ```
 
@@ -72,7 +72,7 @@ type Redis interface {
 ```go
 type Storage interface {
 	Driver
-	Disk(driver string, disk string) (Driver, error)
+	Disk(disk string) (Driver, error)
 }
 ```
 
@@ -106,7 +106,7 @@ type Driver interface {
 ```go
 type Queue interface {
 	Driver
-	Channel(channel string, name string) (Driver, error)
+	Channel(name string) (Driver, error)
 }
 
 type Handler func(data []byte) error

@@ -574,7 +574,7 @@ import "github.com/herhe-com/framework/facades"
 // 使用默认驱动
 facades.Search.Save("index", "id", doc)
 
-// 使用指定驱动
-es := facades.Search.Driver("elasticsearch")
-meilisearch := facades.Search.Driver("meilisearch")
+// 使用指定连接，驱动类型由连接配置决定
+es, err := facades.Search().Channel("default")
+meilisearch, err := facades.Search().Channel("meilisearch")
 ```

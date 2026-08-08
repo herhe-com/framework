@@ -73,21 +73,21 @@ if err != nil {
 err = facades.Storage.Put("images/photo.jpg", file, info.Size())
 ```
 
-切换驱动和磁盘：
+切换磁盘：
 
 ```go
-s3Default, err := facades.Storage.Disk("s3", "default")
+defaultDisk, err := facades.Storage.Disk("default")
 if err != nil {
 	return err
 }
 
-minioPublic, err := facades.Storage.Disk("minio", "public")
+publicDisk, err := facades.Storage.Disk("public")
 if err != nil {
 	return err
 }
 ```
 
-注意：`Disk` 的签名是 `Disk(driver string, disk string)`，不是 `Disk("s3")`。
+`Disk` 只接收磁盘名，驱动类型从 `filesystem.disks.<disk>.driver` 读取。
 
 ## 接口
 
@@ -96,7 +96,7 @@ if err != nil {
 ```go
 type Storage interface {
 	Driver
-	Disk(driver string, disk string) (Driver, error)
+	Disk(disk string) (Driver, error)
 }
 
 type Driver interface {

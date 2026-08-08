@@ -158,12 +158,12 @@ func (r *S3) Put(key string, file io.Reader, size int64) error {
 
 ### Configuration Access
 
-Use the `facades.Cfg` singleton for configuration:
+Use the `facades.Config()` accessor for configuration:
 
 ```go
-defaultDriver := facades.Cfg.GetString("database.driver", DriverMySQL)
-debug := facades.Cfg.GetBool("app.debug")
-configs := facades.Cfg.Get("filesystem.s3").(map[string]any)
+defaultDriver := facades.Config().GetString("database.orm.connections.default.driver", DriverMySQL)
+debug := facades.Config().GetBool("app.debug")
+configs := facades.Config().Get("filesystem.disks.default").(map[string]any)
 ```
 
 ### Database Access

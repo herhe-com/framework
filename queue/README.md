@@ -42,7 +42,7 @@ queue:
 
 未设置 `url` 时，也可以用 `host` 和 `port`，默认分别为 `127.0.0.1` 和 `4222`。认证按 `credentials`、`token`、`username/password` 的顺序选择。延迟消息和 Producer/Consumer TTL 要求 NATS 服务端启用 JetStream；延迟消息还要求服务端支持消息调度。
 
-注意：必须保留 `connections` 这一层。`queue.default` 只保存连接名，example 基础项目如果写成 `queue.host`，则 `NewDriver("rabbitmq", "default")` 读不到配置。
+注意：必须保留 `connections` 这一层。`queue.default` 只保存连接名，驱动类型从 `queue.connections.<name>.driver` 读取。
 
 ## 使用
 
@@ -84,15 +84,15 @@ err := facades.Queue().Consumer(handler, queue.ConsumerOptions{
 })
 ```
 
-切换通道：
+切换连接：
 
 ```go
-rabbitmqReport, err := facades.Queue().Channel("rabbitmq", "report")
+rabbitmqReport, err := facades.Queue().Channel("report")
 if err != nil {
 	return err
 }
 
-natsEvents, err := facades.Queue().Channel("nats", "events")
+natsEvents, err := facades.Queue().Channel("events")
 if err != nil {
 	return err
 }
@@ -103,7 +103,7 @@ if err != nil {
 ```go
 type Queue interface {
 	Driver
-	Channel(channel string, name string) (Driver, error)
+	Channel(name string) (Driver, error)
 }
 
 type Handler func(data []byte) error

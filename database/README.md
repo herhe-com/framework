@@ -68,13 +68,13 @@ database:
 ```go
 db := facades.DB.Default()
 
-mysqlDefault, err := facades.DB.Drivers("mysql")
-mysqlReport, err := facades.DB.Drivers("mysql", "report")
-postgresDefault, err := facades.DB.Drivers("postgresql")
+mysqlDefault, err := facades.DB.Drivers("default")
+mysqlReport, err := facades.DB.Drivers("report")
+postgresDefault, err := facades.DB.Drivers("postgres")
 sqlserverDefault, err := facades.DB.Drivers("sqlserver")
 ```
 
-注意：接口方法名是 `Drivers(driver string, names ...string)`，不是 `Channel()`。
+注意：`Drivers` 接收 ORM 连接名，驱动类型从 `database.orm.connections.<name>.driver` 读取。
 
 ## Redis
 
