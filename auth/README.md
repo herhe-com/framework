@@ -107,7 +107,7 @@ _, err := auth.BlacklistOfJwtValue(ctx, requestCtx) // 当前 Access Token
 err = auth.RevokeRefreshToken(ctx, request.RefreshToken)
 ```
 
-Access Token 和黑名单模式下已使用/已撤销的 Refresh Token 都使用 RedisBloom，按 UTC 到期日期 `YYYYMMDD` 分桶，桶在对应日期结束时自动过期。Bloom Filter 可能误判一个未加入的 ID 为已加入（多拒绝），但不会把仍在过滤器中的 ID 判断为不存在。
+Access Token 和黑名单模式下已使用/已撤销的 Refresh Token 都使用 RedisBloom，Key 模式为 `app.name:blacklist:jwt.sub:jwt|refresh:YYYYMMDD`，桶在对应 UTC 日期结束时自动过期。例如 `app.name=framework`、`jwt.sub=framework` 时，Access 桶为 `framework:blacklist:framework:jwt:20260810`，Refresh 桶为 `framework:blacklist:framework:refresh:20260810`。不同系统即使共用 Redis，也不会共用同一个 Bloom 黑名单桶。Bloom Filter 可能误判一个未加入的 ID 为已加入（多拒绝），但不会把仍在过滤器中的 ID 判断为不存在。
 
 刷新策略由 `jwt.refresh.mode` 控制：
 
