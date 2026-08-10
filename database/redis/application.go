@@ -109,5 +109,9 @@ func newRedisClient(name string) (*redis.Client, string, error) {
 		return nil, "", err
 	}
 
+	if hook := newRequestLogHook(name, redisconfig.ConnectionString(name, "log_mode", redisLogModeError)); hook != nil {
+		client.AddHook(hook)
+	}
+
 	return client, name, nil
 }
