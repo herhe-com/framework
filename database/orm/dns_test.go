@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
 )
@@ -22,6 +23,29 @@ func TestMysqlDSNIncludesConnectionOptions(t *testing.T) {
 
 	if !strings.Contains(dsn, "charset=utf8mb4") || !cfg.ParseTime || cfg.Loc.String() != "Local" {
 		t.Fatalf("expected charset, parseTime and Local timezone, got %q", dsn)
+	}
+}
+
+func TestMysqlDSNIncludesTimeouts(t *testing.T) {
+	dsn := mysqlDSN(
+		"root",
+		"secret",
+		"127.0.0.1",
+		"3306",
+		"upper",
+		"utf8mb4",
+		3*time.Second,
+		5*time.Second,
+		5*time.Second,
+	)
+
+	cfg, err := mysqlDriver.ParseDSN(dsn)
+	if err != nil {
+		t.Fatalf("expected valid mysql DSN, got %q: %v", dsn, err)
+	}
+
+	if cfg.Timeout != 3*time.Second || cfg.ReadTimeout != 5*time.Second || cfg.WriteTimeout != 5*time.Second {
+		t.Fatalf("unexpected mysql timeouts: timeout=%s read=%s write=%s", cfg.Timeout, cfg.ReadTimeout, cfg.WriteTimeout)
 	}
 }
 
