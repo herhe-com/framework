@@ -17,6 +17,14 @@ database:
         charset: utf8mb4
         prefix: ""
         log_mode: error
+        timeout: 3s
+        read_timeout: 5s
+        write_timeout: 5s
+        pool:
+          max_open_conns: 50
+          max_idle_conns: 10
+          conn_max_lifetime: 30m
+          conn_max_idle_time: 5m
       report:
         driver: mysql
         username: root
@@ -61,6 +69,7 @@ database:
         username: ""
         password: ""
         db: 0
+        log_mode: error
       cache:
         driver: redis
         host: 127.0.0.1
@@ -68,3 +77,4 @@ database:
         username: ""
         password: ""
         db: 1
+        log_mode: error

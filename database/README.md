@@ -28,6 +28,14 @@ database:
         charset: utf8mb4
         prefix: ""
         log_mode: error
+        timeout: 3s
+        read_timeout: 5s
+        write_timeout: 5s
+        pool:
+          max_open_conns: 50
+          max_idle_conns: 10
+          conn_max_lifetime: 30m
+          conn_max_idle_time: 5m
       report:
         driver: mysql
         username: root
@@ -92,11 +100,13 @@ database:
         username: ""
         password: ""
         db: 0
+        log_mode: error
       cache:
         driver: redis
         host: 127.0.0.1
         port: "6379"
         db: 1
+        log_mode: error
 ```
 
 使用：
@@ -110,6 +120,9 @@ redis.Set(ctx, "key", "value", 0)
 cacheRedis, err := facades.Redis.Channel("cache")
 ```
 
+- 每个 Redis 连接支持 `log_mode`：`silent` 不记录日志，`error`（默认）只记录请求错误，`info` 记录全部请求。
+- Redis 请求日志只包含连接名、命令名、耗时、状态和错误；不会记录 key、value 或返回值。Pipeline 只记录命令数量。
+- `redis.Nil` 表示 key 不存在，在 `error` 模式下不会作为请求错误记录。
 - 注意：当前实现读取的是 `database.redis.connections.<name>.db`，不是 `database.redis.connections.<name>.database`。如果配置写成 `database`，会落到默认 DB `1`。
 - `database.orm.default` 只保存默认 ORM 连接名，实际连接配置位于 `database.orm.connections.<name>`。
 - `database.orm.migration.table` 和 `database.orm.migration.dir` 保存迁移命名空间配置。
@@ -135,5 +148,6 @@ facades.Cfg.Add("kernel", map[string]any{
 
 - example 基础项目中的业务逻辑通常会直接使用 `facades.DB.Default().WithContext(ctx)`，因此数据库 provider 必须早于 auth、console server 等依赖数据库的 provider。
 - 登录限流、JWT 黑名单等能力依赖 Redis；如果启用相关功能，Redis provider 也必须启动成功。
-- 当前框架没有统一连接池配置读取，README 不应声明 `pool.max_idle_conns` 等字段已经生效。
+- ORM 每个连接支持 `pool.max_open_conns`、`pool.max_idle_conns`、`pool.conn_max_lifetime` 和 `pool.conn_max_idle_time`，默认值分别为 `50`、`10`、`30m` 和 `5m`。
+- MySQL 连接支持 `timeout`、`read_timeout` 和 `write_timeout`，默认值分别为 `3s`、`5s` 和 `5s`；这些字段是 MySQL 驱动参数，不适用于其他 ORM 驱动。
 - 初始化时会真实连接数据库/Redis；缺失配置或服务不可达会导致启动失败。
