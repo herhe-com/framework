@@ -3,8 +3,11 @@
 jwt:
   secret: ""
   sub: default
-  lifetime: 720
-  leeway: 3
+  lifetime: 720 # minutes
+  refresh:
+    mode: blacklist
+    lifetime: 30 # days
+    leeway: 3 # seconds
 
 auth:
   casbin:
@@ -20,8 +23,8 @@ auth:
     lock_message: Account is locked. Please try again in %d minutes.
     attempts_message: "%s (Failed %d times, %d attempts remaining before account lock)"
   callback:
+    auth: null
     jwt: null
-    refresh: null
   permissions:
     - code: user
       name: 用户管理

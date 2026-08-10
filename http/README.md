@@ -141,8 +141,8 @@ func GetProfile(ctx context.Context, c *app.RequestContext) {
     }
     
     // 验证令牌
-    claims, err := auth.CheckJWToken(token)
-    if err != nil {
+    var claims authContract.Claims
+    if err := auth.ValidateAccessToken(ctx, &claims, string(token)); err != nil {
         http.Unauthorized(c, "令牌无效或已过期")
         return
     }
@@ -443,8 +443,8 @@ func AuthMiddleware() app.HandlerFunc {
             return
         }
         
-        claims, err := auth.CheckJWToken(token)
-        if err != nil {
+        var claims authContract.Claims
+        if err := auth.ValidateAccessToken(ctx, &claims, string(token)); err != nil {
             http.Unauthorized(c, "令牌无效")
             c.Abort()
             return
