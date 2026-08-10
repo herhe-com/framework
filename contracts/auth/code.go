@@ -2,6 +2,8 @@ package auth
 
 const (
 	JwtOfAuthorization = "Authorization"
+	JwtOfRefreshToken  = "Refresh-Token"
+	JwtOfTokenPair     = "Token-Pair"
 )
 
 const (
