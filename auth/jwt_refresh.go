@@ -234,7 +234,11 @@ func RevokeRefreshToken(ctx context.Context, refreshToken string) error {
 		return cache.Default().Del(ctx, jwtRefreshKey("whitelist", claims.ID), graceKey).Err()
 	}
 
-	key, expiresAt := jwtBlacklistDateBucket(claims.ExpiresAt.Time, "jwt", "refresh")
+	namespace, err := jwtBlacklistNamespace(claims.Issuer)
+	if err != nil {
+		return err
+	}
+	key, expiresAt := jwtBlacklistDateBucket(claims.ExpiresAt.Time, namespace, "refresh")
 	return cache.Default().Eval(ctx, luaRevokeRefreshWithBlacklist, []string{
 		key,
 		graceKey,
@@ -328,7 +332,11 @@ func refreshWithBlacklist(
 	candidate contractauth.TokenPair,
 	leeway int64,
 ) (contractauth.TokenPair, error) {
-	key, expiresAt := jwtBlacklistDateBucket(oldClaims.ExpiresAt.Time, "jwt", "refresh")
+	namespace, err := jwtBlacklistNamespace(oldClaims.Issuer)
+	if err != nil {
+		return contractauth.TokenPair{}, err
+	}
+	key, expiresAt := jwtBlacklistDateBucket(oldClaims.ExpiresAt.Time, namespace, "refresh")
 	args := []any{oldClaims.ID, expiresAt.Unix(), leeway}
 	args = append(args, tokenPairScriptArguments(candidate)...)
 	result, err := cache.Default().Eval(ctx, luaRefreshWithBlacklist, []string{

@@ -484,7 +484,7 @@ func TestRefreshJWTokensBlacklistReusesRedisGracePair(t *testing.T) {
 	if len(capturedArgs) < 9 {
 		t.Fatalf("expected blacklist Lua arguments, got %#v", capturedArgs)
 	}
-	if key := fmt.Sprint(capturedArgs[3]); !strings.Contains(key, ":blacklist:jwt:refresh:") {
+	if key := fmt.Sprint(capturedArgs[3]); !strings.Contains(key, ":blacklist:api:refresh:") {
 		t.Fatalf("expected dated refresh blacklist bucket, got %q", key)
 	}
 	if key := fmt.Sprint(capturedArgs[4]); key != jwtRefreshKey("grace", oldClaims.ID) {
@@ -622,6 +622,9 @@ func TestRevokeRefreshTokenUsesConfiguredMode(t *testing.T) {
 		}
 		if len(evalArgs) < 7 || !strings.Contains(fmt.Sprint(evalArgs[1]), "BF.ADD") {
 			t.Fatalf("expected blacklist revoke Lua, got %#v", evalArgs)
+		}
+		if key := fmt.Sprint(evalArgs[3]); !strings.Contains(key, ":blacklist:api:refresh:") {
+			t.Fatalf("expected issuer-isolated refresh blacklist key, got %q", key)
 		}
 		if key := fmt.Sprint(evalArgs[4]); key != jwtRefreshKey("grace", claims.ID) {
 			t.Fatalf("expected grace key %q to be deleted, got %q", jwtRefreshKey("grace", claims.ID), key)

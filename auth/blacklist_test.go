@@ -124,6 +124,7 @@ func TestCheckBlacklistOfJwtUsesBloomFilter(t *testing.T) {
 	expiresAt := time.Now().Add(time.Hour)
 	claims := contractauth.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "framework:api",
 			ID:        "token-1",
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
@@ -138,7 +139,7 @@ func TestCheckBlacklistOfJwtUsesBloomFilter(t *testing.T) {
 		cmd.(*redis.Cmd).SetVal(true)
 		return nil
 	})
-	expectedKey := KeyBlacklist("jwt", expiresAt.UTC().Format("20060102"))
+	expectedKey := KeyBlacklist("api", "jwt", expiresAt.UTC().Format("20060102"))
 
 	ctx := app.NewContext(0)
 	ctx.Set(ContextOfClaims, claims)
@@ -161,6 +162,45 @@ func TestCheckBlacklistOfJwtUsesBloomFilter(t *testing.T) {
 	}
 }
 
+func TestJWTBlacklistBucketsAreIsolatedByIssuer(t *testing.T) {
+	registerJWTConfigOnly(t)
+
+	expiresAt := time.Date(2026, time.August, 10, 12, 0, 0, 0, time.UTC)
+	claims := func(issuer string) *contractauth.Claims {
+		return &contractauth.Claims{RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    issuer,
+			ID:        "token-1",
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+		}}
+	}
+
+	first, _, err := jwtBlacklistBucket(claims("framework:framework"))
+	if err != nil {
+		t.Fatalf("expected first blacklist bucket: %v", err)
+	}
+	second, _, err := jwtBlacklistBucket(claims("framework:admin"))
+	if err != nil {
+		t.Fatalf("expected second blacklist bucket: %v", err)
+	}
+	if first == second {
+		t.Fatalf("expected issuer-isolated blacklist buckets, got %q", first)
+	}
+	if first != "framework:blacklist:framework:jwt:20260810" {
+		t.Fatalf("expected access blacklist key format, got %q", first)
+	}
+	namespace, err := jwtBlacklistNamespace("framework:framework")
+	if err != nil {
+		t.Fatalf("expected refresh blacklist namespace: %v", err)
+	}
+	refresh, _ := jwtBlacklistDateBucket(expiresAt, namespace, "refresh")
+	if refresh != "framework:blacklist:framework:refresh:20260810" {
+		t.Fatalf("expected refresh blacklist key format, got %q", refresh)
+	}
+	if second != "framework:blacklist:admin:jwt:20260810" {
+		t.Fatalf("expected isolated admin blacklist key, got %q", second)
+	}
+}
+
 func TestCheckBlacklistOfJwtReturnsRedisError(t *testing.T) {
 	expectedErr := errors.New("Redis unavailable")
 	registerBlacklistTestServices(t, func(context.Context, redis.Cmder) error {
@@ -170,6 +210,7 @@ func TestCheckBlacklistOfJwtReturnsRedisError(t *testing.T) {
 	ctx := app.NewContext(0)
 	ctx.Set(ContextOfClaims, contractauth.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "framework:api",
 			ID:        "token-1",
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
@@ -199,12 +240,13 @@ func TestBlacklistOfJwtValueUsesBloomFilterBucket(t *testing.T) {
 	expiresAt := time.Now().Add(time.Hour)
 	claims := contractauth.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "framework:api",
 			ID:        "token-1",
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
 	}
 	bucketDate := expiresAt.UTC()
-	expectedKey := KeyBlacklist("jwt", bucketDate.Format("20060102"))
+	expectedKey := KeyBlacklist("api", "jwt", bucketDate.Format("20060102"))
 	expectedExpiresAt := time.Date(bucketDate.Year(), bucketDate.Month(), bucketDate.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, 1)
 
 	ctx := app.NewContext(0)
@@ -243,6 +285,7 @@ func TestBlacklistOfJwtValueReturnsRedisError(t *testing.T) {
 	ctx := app.NewContext(0)
 	ctx.Set(ContextOfClaims, contractauth.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "framework:api",
 			ID:        "token-1",
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},

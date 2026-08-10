@@ -139,9 +139,31 @@ func jwtBlacklistBucket(claims *contractauth.Claims) (string, time.Time, error) 
 	if claims.ID == "" {
 		return "", time.Time{}, errors.New("id cannot be empty")
 	}
+	if claims.Issuer == "" {
+		return "", time.Time{}, errors.New("issuer cannot be empty")
+	}
 
-	key, expiresAt := jwtBlacklistDateBucket(claims.ExpiresAt.Time, "jwt")
+	namespace, err := jwtBlacklistNamespace(claims.Issuer)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	key, expiresAt := jwtBlacklistDateBucket(claims.ExpiresAt.Time, namespace, "jwt")
 	return key, expiresAt, nil
+}
+
+func jwtBlacklistNamespace(issuer string) (string, error) {
+	prefix := facades.Config().GetString("app.name") + ":"
+	if !strings.HasPrefix(issuer, prefix) {
+		return "", errors.New("invalid issuer")
+	}
+
+	namespace := strings.TrimPrefix(issuer, prefix)
+	if namespace == "" {
+		return "", errors.New("JWT namespace cannot be empty")
+	}
+
+	return namespace, nil
 }
 
 func jwtBlacklistDateBucket(expiresAt time.Time, args ...any) (string, time.Time) {
