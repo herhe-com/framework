@@ -149,7 +149,22 @@ func newMysqlClient(name string) (*gorm.DB, string, error) {
 		logMode = logger.Silent
 	}
 
-	dialectal := mysql.Open(mysqlDSN(username, password, host, port, db, charset))
+	timeout, err := ormConnectionDuration(name, "timeout", defaultORMTimeout)
+	if err != nil {
+		return nil, "", err
+	}
+
+	readTimeout, err := ormConnectionDuration(name, "read_timeout", defaultORMReadTimeout)
+	if err != nil {
+		return nil, "", err
+	}
+
+	writeTimeout, err := ormConnectionDuration(name, "write_timeout", defaultORMWriteTimeout)
+	if err != nil {
+		return nil, "", err
+	}
+
+	dialectal := mysql.Open(mysqlDSN(username, password, host, port, db, charset, timeout, readTimeout, writeTimeout))
 
 	config := gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
@@ -164,7 +179,7 @@ func newMysqlClient(name string) (*gorm.DB, string, error) {
 		config.PrepareStmt = false
 	}
 
-	open, err := gorm.Open(dialectal, &config)
+	open, err := openORM(name, dialectal, &config)
 
 	if err != nil {
 		return nil, "", err
@@ -201,7 +216,7 @@ func newSQLiteClient(name string) (*gorm.DB, string, error) {
 		config.PrepareStmt = false
 	}
 
-	open, err := gorm.Open(dialectal, &config)
+	open, err := openORM(name, dialectal, &config)
 
 	if err != nil {
 		return nil, "", err
@@ -260,7 +275,7 @@ func newPostgreSQLClient(name string) (*gorm.DB, string, error) {
 		config.PrepareStmt = false
 	}
 
-	open, err := gorm.Open(dialectal, &config)
+	open, err := openORM(name, dialectal, &config)
 
 	if err != nil {
 		return nil, "", err
@@ -317,7 +332,7 @@ func newSQLServerClient(name string) (*gorm.DB, string, error) {
 		config.PrepareStmt = false
 	}
 
-	open, err := gorm.Open(dialectal, &config)
+	open, err := openORM(name, dialectal, &config)
 
 	if err != nil {
 		return nil, "", err

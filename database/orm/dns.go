@@ -8,7 +8,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-func mysqlDSN(username, password, host, port, db, charset string) string {
+func mysqlDSN(username, password, host, port, db, charset string, timeouts ...time.Duration) string {
 
 	cfg := mysql.NewConfig()
 	cfg.User = username
@@ -19,6 +19,15 @@ func mysqlDSN(username, password, host, port, db, charset string) string {
 	cfg.AllowNativePasswords = true
 	cfg.ParseTime = true
 	cfg.Loc = time.Local
+	if len(timeouts) > 0 {
+		cfg.Timeout = timeouts[0]
+	}
+	if len(timeouts) > 1 {
+		cfg.ReadTimeout = timeouts[1]
+	}
+	if len(timeouts) > 2 {
+		cfg.WriteTimeout = timeouts[2]
+	}
 
 	if charset != "" {
 		cfg.Params = map[string]string{
