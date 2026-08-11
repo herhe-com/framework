@@ -1,13 +1,35 @@
 # captcha 配置
 
 captcha:
+  # 是否启用验证码
+  enable: true
+
+  # click、slide、rotate 或 auto；auto 会随机选择一种验证码
+  driver: click
+
+  # 验证数据在 Redis 中的有效期，单位秒，必须大于 0
+  expire: 300
+
   click:
     min: 4
     max: 4
     width: 300
     height: 220
+    # 空值使用内置中文字符集
     char: ""
     padding: 5
+
+  slide:
+    width: 300
+    height: 220
+    padding: 5
+
+  rotate:
+    size: 220
+    padding: 5
+
   resources:
-    bg: /resources/bg
-    font: /resources/font
+    # 资源路径相对于应用根目录；空值使用内置资源
+    bg: ""
+    font: ""
+    tile: ""
