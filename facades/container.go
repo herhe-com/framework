@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/herhe-com/framework/contracts/ai"
+	contractcaptcha "github.com/herhe-com/framework/contracts/captcha"
 	"github.com/herhe-com/framework/contracts/config"
 	"github.com/herhe-com/framework/contracts/database"
 	"github.com/herhe-com/framework/contracts/filesystem"
@@ -128,6 +129,11 @@ func Redis() database.Redis {
 // OptionalRedis returns the registered Redis service when available.
 func OptionalRedis() (database.Redis, bool) {
 	return Optional[database.Redis]()
+}
+
+// Captcha returns the registered captcha application.
+func Captcha() contractcaptcha.Application {
+	return MustGet[contractcaptcha.Application]()
 }
 
 // Storage returns the registered filesystem service.

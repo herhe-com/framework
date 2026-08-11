@@ -1,226 +1,229 @@
 package captcha
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
-	"image"
+	"fmt"
 	"math/rand"
-	"os"
-	"path"
 	"strings"
+	"sync"
+	"time"
 
-	"github.com/golang/freetype"
-	"github.com/golang/freetype/truetype"
-	"github.com/herhe-com/framework/contracts/captcha"
+	"github.com/gookit/color"
+
+	clickcaptcha "github.com/herhe-com/framework/captcha/click"
+	rotatecaptcha "github.com/herhe-com/framework/captcha/rotate"
+	slidecaptcha "github.com/herhe-com/framework/captcha/slide"
+	contractcaptcha "github.com/herhe-com/framework/contracts/captcha"
 	"github.com/herhe-com/framework/facades"
-	"github.com/wenlng/go-captcha-assets/resources/fonts/fzshengsksjw"
-	"github.com/wenlng/go-captcha-assets/resources/imagesv2"
-	"github.com/wenlng/go-captcha/v2/base/codec"
-	"github.com/wenlng/go-captcha/v2/base/option"
-	"github.com/wenlng/go-captcha/v2/click"
+	"github.com/herhe-com/framework/support/util"
 )
 
-func Click() (result *captcha.Click, err error) {
+const (
+	DriverAuto   = "auto"
+	DriverClick  = "click"
+	DriverSlide  = "slide"
+	DriverRotate = "rotate"
+)
 
-	minLen := facades.Config().GetInt("captcha.click.min", 4)
-	maxLen := facades.Config().GetInt("captcha.click.max", 4)
+var concreteDrivers = []string{DriverClick, DriverSlide, DriverRotate}
 
-	width := facades.Config().GetInt("captcha.click.width", 300)
-	height := facades.Config().GetInt("captcha.click.height", 220)
+type storedCaptcha struct {
+	Driver string          `json:"driver"`
+	Target json.RawMessage `json:"target"`
+}
 
-	char := facades.Config().GetString("captcha.click.char", "")
+// Captcha is the captcha application.
+type Captcha struct {
+	mu      sync.RWMutex
+	drivers map[string]contractcaptcha.Driver
+}
 
-	var chars []string
+var _ contractcaptcha.Application = (*Captcha)(nil)
 
-	if char != "" {
-		chars = strings.Split(char, "")
-	} else {
-		chars = []string{
-			"诚", "信", "立", "业", "创", "新", "驱", "动",
-			"协", "作", "共", "赢", "服", "务", "社", "会",
-			"成", "就", "卓", "越", "未", "来", "责", "任",
-			"品", "质", "担", "当", "发", "展", "愿", "景",
-		}
+// NewCaptcha creates the captcha application.
+func NewCaptcha() *Captcha {
+	application, err := NewCaptchaWithError()
+	if err != nil {
+		color.Errorf("[captcha] %s", err)
+		return nil
 	}
 
-	builder := click.NewBuilder(
-		click.WithImageSize(option.Size{
-			Width:  width,
-			Height: height,
-		}),
-		click.WithRangeLen(option.RangeVal{Min: minLen, Max: maxLen + 2}),
-		click.WithRangeVerifyLen(option.RangeVal{Min: minLen, Max: maxLen}),
-	)
+	return application
+}
 
-	fontN, err := font()
+// NewCaptchaWithError creates the captcha application and returns initialization errors.
+func NewCaptchaWithError() (*Captcha, error) {
+	application := newCaptcha()
+	if !facades.Config().GetBool("captcha.enable", true) {
+		return application, nil
+	}
 
+	driver := DefaultDriver()
+	if driver == DriverAuto {
+		return application, nil
+	}
+
+	instance, err := NewDriver(driver)
+	if err != nil {
+		return nil, err
+	}
+	application.drivers[driver] = instance
+
+	return application, nil
+}
+
+// DefaultDriver returns the configured default captcha driver.
+func DefaultDriver() string {
+	return strings.ToLower(facades.Config().GetString("captcha.driver", DriverClick))
+}
+
+// NewDriver creates a captcha driver from the captcha configuration.
+func NewDriver(driver string) (contractcaptcha.Driver, error) {
+	driver = strings.ToLower(driver)
+	configs, _ := facades.Config().Get("captcha").(map[string]any)
+
+	switch driver {
+	case DriverClick:
+		return clickcaptcha.NewClick(facades.Root(), configs), nil
+	case DriverSlide:
+		return slidecaptcha.NewSlide(facades.Root(), configs), nil
+	case DriverRotate:
+		return rotatecaptcha.NewRotate(facades.Root(), configs), nil
+	default:
+		return nil, fmt.Errorf("invalid captcha driver: %s, only support click, slide, rotate", driver)
+	}
+}
+
+// Driver returns a cached captcha driver.
+func (r *Captcha) Driver(driver string) (contractcaptcha.Driver, error) {
+	driver = strings.ToLower(driver)
+
+	r.mu.RLock()
+	if instance, ok := r.drivers[driver]; ok {
+		r.mu.RUnlock()
+		return instance, nil
+	}
+	r.mu.RUnlock()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if instance, ok := r.drivers[driver]; ok {
+		return instance, nil
+	}
+
+	instance, err := NewDriver(driver)
+	if err != nil {
+		return nil, err
+	}
+	r.drivers[driver] = instance
+
+	return instance, nil
+}
+
+// Generate creates the configured captcha and stores its verification target in Redis.
+func (r *Captcha) Generate(ctx context.Context) (*contractcaptcha.Captcha, error) {
+	if !facades.Config().GetBool("captcha.enable", true) {
+		return nil, nil
+	}
+
+	driverName := DefaultDriver()
+	if driverName == DriverAuto {
+		driverName = concreteDrivers[rand.Intn(len(concreteDrivers))]
+	}
+
+	driver, err := r.Driver(driverName)
+	if err != nil {
+		return nil, err
+	}
+	challenge, err := driver.Generate()
+	if err != nil {
+		return nil, err
+	}
+	if challenge == nil || len(challenge.Target) == 0 {
+		return nil, contractcaptcha.ErrCaptchaGenerate
+	}
+
+	result := &contractcaptcha.Captcha{
+		Key:    facades.Snowflake().Generate().String(),
+		Driver: driverName,
+		Master: challenge.Master,
+		Thumb:  challenge.Thumb,
+	}
+	payload, err := json.Marshal(storedCaptcha{Driver: driverName, Target: challenge.Target})
 	if err != nil {
 		return nil, err
 	}
 
-	bgImage, err := background()
-
-	if err != nil {
-		return nil, err
+	expire := facades.Config().GetInt("captcha.expire", 300)
+	if expire <= 0 {
+		return nil, errors.New("验证码过期时间必须大于 0")
 	}
-
-	builder.SetResources(
-		click.WithChars(chars),
-		click.WithFonts([]*truetype.Font{
-			fontN,
-		}),
-		click.WithBackgrounds(bgImage),
-	)
-
-	textCapt := builder.Make()
-
-	captData, err := textCapt.Generate()
-
-	if err != nil {
-		return nil, err
+	redis, ok := facades.OptionalRedis()
+	if !ok || redis.Default() == nil {
+		return nil, errors.New("请先初始化 Redis")
 	}
-
-	result = &captcha.Click{}
-
-	result.Dots = captData.GetData()
-
-	if result.Dots == nil {
-		return nil, captcha.ErrCaptchaGenerate
-	}
-
-	result.Master, err = captData.GetMasterImage().ToBase64()
-
-	if err != nil {
-		return nil, err
-	}
-
-	result.Thumb, err = captData.GetThumbImage().ToBase64()
-
-	if err != nil {
+	if err = redis.Default().Set(ctx, captchaRedisKey(result.Key), payload, time.Duration(expire)*time.Second).Err(); err != nil {
 		return nil, err
 	}
 
 	return result, nil
 }
 
-func ClickVerify(sources []captcha.Dot, targets []click.Dot) error {
-
-	padding := facades.Config().GetInt("captcha.click.padding", 5)
-
-	if len(sources) != len(targets) {
-		return errors.New("验证码长度不一致")
+// Verify loads the stored driver and validates the matching user data.
+func (r *Captcha) Verify(ctx context.Context, data contractcaptcha.VerifyData) error {
+	if !facades.Config().GetBool("captcha.enable", true) {
+		return nil
 	}
 
-	for _, value := range targets {
-
-		mark := true
-
-		for _, val := range sources {
-
-			if value.Index == val.Index {
-				mark = false
-
-				if ok := click.Validate(val.X, val.Y, value.X, value.Y, value.Width, value.Height, padding); !ok {
-					return errors.New("验证码错误")
-				}
-			}
-		}
-
-		if mark {
-			return errors.New("验证码错误")
-		}
+	redisKey := captchaRedisKey(data.Key)
+	redis, ok := facades.OptionalRedis()
+	if !ok || redis.Default() == nil {
+		return errors.New("请先初始化 Redis")
+	}
+	payload, err := redis.Default().Get(ctx, redisKey).Bytes()
+	if err != nil {
+		return errors.New("验证码不存在或已过期")
 	}
 
-	return nil
+	var stored storedCaptcha
+	if err = json.Unmarshal(payload, &stored); err != nil {
+		return err
+	}
+	driver, err := r.Driver(stored.Driver)
+	if err != nil {
+		return errors.New("验证码类型错误")
+	}
+	if err = driver.Verify(data, stored.Target); err != nil {
+		return err
+	}
+
+	return redis.Default().Del(ctx, redisKey).Err()
 }
 
-func background() ([]image.Image, error) {
-
-	dir := facades.Config().GetString("captcha.resources.bg", "/resources/bg")
-
-	dir = "/" + strings.Trim(dir, "/")
-
-	entries, err := os.ReadDir(facades.Root() + dir)
-
-	if err != nil {
-		return nil, err
+// Generate creates a captcha through the registered application or a standalone application.
+func Generate(ctx context.Context) (*contractcaptcha.Captcha, error) {
+	if application, ok := facades.Optional[contractcaptcha.Application](); ok {
+		return application.Generate(ctx)
 	}
 
-	files := make([]string, 0)
-
-	for _, entry := range entries {
-
-		ext := path.Ext(entry.Name())
-
-		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" {
-			files = append(files, entry.Name())
-		}
-	}
-
-	if len(files) == 0 {
-		return imagesv2.GetImages()
-	}
-
-	images := make([]image.Image, 0)
-
-	for _, file := range files {
-
-		imgBytes, err := os.ReadFile(facades.Root() + dir + "/" + file)
-
-		if err != nil {
-			return nil, err
-		}
-
-		ext := path.Ext(file)
-
-		switch ext {
-		case ".png":
-			if img, err := codec.DecodeByteToPng(imgBytes); err == nil {
-				images = append(images, img)
-			}
-		case ".jpg":
-			if img, err := codec.DecodeByteToJpeg(imgBytes); err == nil {
-				images = append(images, img)
-			}
-		case ".jpeg":
-			if img, err := codec.DecodeByteToJpeg(imgBytes); err == nil {
-				images = append(images, img)
-			}
-		}
-	}
-
-	return images, nil
+	return newCaptcha().Generate(ctx)
 }
 
-func font() (*truetype.Font, error) {
-
-	dir := facades.Config().GetString("captcha.resources.font", "/resources/font")
-
-	dir = "/" + strings.Trim(dir, "/")
-
-	entries, _ := os.ReadDir(facades.Root() + dir)
-
-	files := make([]string, 0)
-
-	for _, entry := range entries {
-
-		ext := path.Ext(entry.Name())
-
-		if ext == ".ttf" {
-			files = append(files, entry.Name())
-		}
+// Verify validates a captcha through the registered application or a standalone application.
+func Verify(ctx context.Context, data contractcaptcha.VerifyData) error {
+	if application, ok := facades.Optional[contractcaptcha.Application](); ok {
+		return application.Verify(ctx, data)
 	}
 
-	if len(files) == 0 {
-		return fzshengsksjw.GetFont()
-	}
+	return newCaptcha().Verify(ctx, data)
+}
 
-	ft := files[rand.Intn(len(files))]
+func newCaptcha() *Captcha {
+	return &Captcha{drivers: make(map[string]contractcaptcha.Driver)}
+}
 
-	fontBytes, err := os.ReadFile(facades.Root() + dir + "/" + ft)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return freetype.ParseFont(fontBytes)
+func captchaRedisKey(key string) string {
+	return util.Keys("captcha", key)
 }
