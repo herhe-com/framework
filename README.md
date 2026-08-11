@@ -26,9 +26,10 @@ func Boot() {
 cfg := facades.Cfg
 cfg.Add("kernel", map[string]any{
 	"providers": []service.Provider{
-		&orm.ServiceProvider{},
-		&redis.ServiceProvider{},
-		&filesystem.ServiceProvider{},
+			&orm.ServiceProvider{},
+			&redis.ServiceProvider{},
+			&captcha.ServiceProvider{},
+			&filesystem.ServiceProvider{},
 		&validation.ServiceProvider{},
 		&console.ServiceProvider{},
 	},
@@ -41,9 +42,10 @@ cfg.Add("kernel", map[string]any{
 
 - `foundation`: 应用根路径、时区、provider 注册和启动。
 - `config`: 基于 Viper 的本地/远程配置读取，支持运行时 `Add` 和 `Set`。
-- `facades`: 全局单例访问器，例如 `Cfg`、`DB`、`Redis`、`Storage`、`Queue`、`Validator`。
+- `facades`: 全局单例访问器，例如 `Cfg`、`DB`、`Redis`、`Captcha`、`Storage`、`Queue`、`Validator`。
 - `database`: GORM、Redis 连接管理。
 - `filesystem`: S3、OSS、COS、MinIO、Qiniu 的统一存储接口。
+- `captcha`: Click、Slide、Rotate 的统一验证码驱动接口。
 - `auth`: JWT、Casbin 权限、token 黑名单、临时 token。
 - `console`: Cobra 命令封装，内置 server、migration、password 等命令。
 - `http`: Hertz 响应和中间件。

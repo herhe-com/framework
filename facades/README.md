@@ -11,6 +11,7 @@
 ```go
 facades.Register[config.Application](app)
 facades.Register[database.DB](db)
+facades.Register[captcha.Application](captchaApplication)
 facades.Register[filesystem.Storage](storage)
 ```
 
@@ -27,6 +28,7 @@ redis, ok := facades.Optional[database.Redis]()
 ```go
 name := facades.Config().GetString("app.name", "UPER")
 db := facades.Database().Default()
+captcha := facades.Captcha()
 storage := facades.Storage()
 ```
 
@@ -44,6 +46,7 @@ facades.Register(ormDatabase)              // 不推荐，可能注册为 *orm.D
 | `Config()` | `contracts/config.Application` | `config.ServiceProvider` |
 | `Database()` | `contracts/database.DB` | `database/orm.ServiceProvider` |
 | `Redis()` | `contracts/database.Redis` | `database/redis.ServiceProvider` |
+| `Captcha()` | `contracts/captcha.Application` | `captcha.ServiceProvider` |
 | `Storage()` | `contracts/filesystem.Storage` | `filesystem.ServiceProvider` |
 | `Queue()` | `contracts/queue.Queue` | `queue.ServiceProvider` |
 | `Search()` | `contracts/search.Search` | `search.ServiceProvider` |
@@ -76,7 +79,7 @@ facades.Unregister[database.DB]()
 
 1. `foundation` 注册 `facades.RootPath`。
 2. `config.ServiceProvider` 注册 `contracts/config.Application`。
-3. 业务配置中的 `kernel.providers` 注册 ORM、Redis、Filesystem、Validation、Auth、Console 等 provider。
+3. 业务配置中的 `kernel.providers` 注册 ORM、Redis、Captcha、Filesystem、Validation、Auth、Console 等 provider。
 4. 路由和业务 handler 中通过 `facades.*()` 或 `facades.MustGet[T]()` 使用服务。
 
 ## 风险和约束

@@ -1,225 +1,202 @@
 # Captcha 组件
 
-点击式验证码生成和验证组件，支持中文字符验证码。
+验证码生成与验证组件，支持点击、滑块、旋转三种验证码，并可随机选择验证码类型。
 
 ## 功能特性
 
-- 点击式验证码生成
-- 可自定义字符集（支持中文）
-- 可配置图片尺寸
-- 可配置字符数量和内边距
-- 支持自定义字体和背景图
-- Base64 编码的图片输出
-- 坐标验证
+- 支持 `click`、`slide`、`rotate` 和 `auto` 驱动
+- 点击、滑块、旋转分别由独立驱动包实现
+- 统一返回验证码类型、标识、主图和提示图
+- 验证数据存储到 Redis，并在验证成功后删除
+- 支持配置有效期、图片尺寸和验证容差
+- 点击验证码支持自定义字符集与字体
+- 支持自定义背景图和滑块素材
+- 未配置资源目录时使用内置资源
 
-## 使用方法
-
-### 生成验证码
-
-```go
-import "github.com/herhe-com/framework/captcha"
-
-// 生成验证码
-result, err := captcha.Click()
-if err != nil {
-    // 处理错误
-}
-
-// 返回给前端
-response := map[string]interface{}{
-    "master": result.Master,     // 主图（Base64）
-    "thumb":  result.Thumb,      // 缩略图（Base64）
-    "key":    result.Key,        // 验证码标识
-}
-```
-
-### 验证验证码
-
-```go
-// 用户点击坐标
-dots := []captcha.Dot{
-    {X: 100, Y: 150},
-    {X: 200, Y: 180},
-}
-
-// 验证
-valid := captcha.ClickVerify(result.Key, dots)
-if valid {
-    // 验证通过
-} else {
-    // 验证失败
-}
-```
-
-## 配置选项
-
-在配置文件中自定义验证码参数：
+## 配置
 
 ```yaml
 captcha:
-  width: 300              # 主图宽度
-  height: 200             # 主图高度
-  thumb_width: 150        # 缩略图宽度
-  thumb_height: 40        # 缩略图高度
-  char_count: 4           # 字符数量
-  padding: 20             # 内边距
-  font_path: fonts/custom.ttf        # 自定义字体路径
-  background: images/bg.jpg          # 背景图路径
-  chars: "的一是在不了有和人这中大为上个国我以要他时来用们生到作地于出就分对成会可主发年动同工也能下过子说产种面而方后多定行学法所民得经十三之进着等部度家电力里如水化高自二理起小物现实加量都两体制机当使点从业本去把性好应开它合还因由其些然前外天政四日那社义事平形相全表间样与关各重新线内数正心反你明看原又么利比或但质气第向道命此变条只没结解问意建月公无系军很情者最立代想已通并提直题党程展五果料象员革位入常文总次品式活设及管特件长求老头基资边流路级少图山统接知较将组见计别她手角期根论运农指几九区强放决西被干做必战先回则任取据处队南给色光门即保治北造百规热领七海口东导器压志世金增争济阶油思术极交受联什认六共权收证改清己美再采转更单风切打白教速花带安场身车例真务具万每目至达走积示议声报斗完类八离华名确才科张信马节话米整空元况今集温传土许步群广石记需段研界拉林律叫且究观越织装影算低持音众书布复容儿须际商非验连断深难近矿千周委素技备半办青省列习响约支般史感劳便团往酸历市克何除消构府称太准精值号率族维划选标写存候毛亲快效斯院查江型眼王按格养易置派层片始却专状育厂京识适属圆包火住调满县局照参红细引听该铁价严"
+  enable: true           # 是否启用验证码，关闭后生成返回 nil，校验直接通过
+  driver: click          # click、slide、rotate 或 auto，默认 click
+  expire: 300            # Redis 中的有效期，单位秒，必须大于 0
+
+  click:
+    min: 4               # 最少点击字符数
+    max: 4               # 最多点击字符数
+    width: 300            # 主图宽度
+    height: 220           # 主图高度
+    char: ""              # 自定义字符集，空值使用内置中文字符
+    padding: 5            # 点击坐标验证容差
+
+  slide:
+    width: 300            # 主图宽度
+    height: 220           # 主图高度
+    padding: 5            # 滑块横坐标验证容差
+
+  rotate:
+    size: 220             # 方形图片边长
+    padding: 5            # 旋转角度验证容差
+
+  resources:
+    bg: ""                # 背景图目录，支持 png、jpg、jpeg
+    font: ""              # 点击验证码字体目录，支持 ttf
+    tile: ""              # 滑块素材目录
 ```
 
-## 核心类型
+资源目录相对于 `facades.Root()`。留空时使用组件内置资源。
 
-### ClickResponse
+自定义滑块素材目录中的每套素材需要放在独立子目录内：
+
+```text
+resources/tile/
+└── default/
+    ├── tile.png
+    ├── tile-shadow.png
+    └── tile-mask.png
+```
+
+## 服务注册
+
+验证码应用与 `filesystem` 一样通过服务提供者注册，并由 facade 统一访问：
 
 ```go
-type ClickResponse struct {
-    Master string      // 主图 Base64 编码
-    Thumb  string      // 缩略图 Base64 编码
-    Key    string      // 验证码唯一标识
-    Dots   []Dot       // 正确的点击坐标（内部使用）
-}
-```
-
-### Dot
-
-```go
-type Dot struct {
-    X int  // X 坐标
-    Y int  // Y 坐标
-}
-```
-
-## 工作原理
-
-### 生成流程
-
-1. 从字符集中随机选择指定数量的字符
-2. 在主图上随机位置绘制这些字符
-3. 记录每个字符的坐标
-4. 生成包含相同字符的缩略图
-5. 将坐标信息存储到 Redis（带过期时间）
-6. 返回 Base64 编码的图片和验证码标识
-
-### 验证流程
-
-1. 从 Redis 获取存储的正确坐标
-2. 比较用户点击坐标与正确坐标
-3. 允许一定的误差范围（默认 ±10 像素）
-4. 验证通过后删除 Redis 中的记录（防止重复使用）
-
-## 高级用法
-
-### 自定义字符集
-
-```go
-// 使用英文字符
-captcha.SetCharset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-
-// 使用数字
-captcha.SetCharset("0123456789")
-```
-
-### 自定义验证容差
-
-```go
-// 设置更严格的验证（±5 像素）
-captcha.SetTolerance(5)
-
-// 设置更宽松的验证（±15 像素）
-captcha.SetTolerance(15)
-```
-
-### 自定义过期时间
-
-```go
-// 设置验证码 5 分钟过期
-captcha.SetExpiration(5 * time.Minute)
-```
-
-## 前端集成示例
-
-### 获取验证码
-
-```javascript
-// 请求验证码
-fetch('/api/captcha/generate')
-  .then(res => res.json())
-  .then(data => {
-    // 显示主图
-    document.getElementById('master-img').src = 'data:image/png;base64,' + data.master;
-    
-    // 显示缩略图（提示用户点击哪些字符）
-    document.getElementById('thumb-img').src = 'data:image/png;base64,' + data.thumb;
-    
-    // 保存验证码 key
-    captchaKey = data.key;
-  });
-```
-
-### 收集点击坐标
-
-```javascript
-const dots = [];
-
-document.getElementById('master-img').addEventListener('click', (e) => {
-  const rect = e.target.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  
-  dots.push({ x: Math.round(x), y: Math.round(y) });
-  
-  // 绘制点击标记
-  drawDot(x, y);
-});
-```
-
-### 提交验证
-
-```javascript
-fetch('/api/captcha/verify', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    key: captchaKey,
-    dots: dots
-  })
+facades.Cfg.Add("kernel", map[string]any{
+    "providers": []service.Provider{
+        &redis.ServiceProvider{},
+        &captcha.ServiceProvider{},
+    },
 })
-.then(res => res.json())
-.then(data => {
-  if (data.valid) {
-    // 验证通过
-  } else {
-    // 验证失败，重新生成验证码
-  }
-});
 ```
 
-## 安全建议
+应用层负责驱动选择、缓存和 Redis 生命周期，具体实现分别位于 `captcha/click`、`captcha/slide`、`captcha/rotate`。未注册服务提供者时，原有包级 `Generate` 和 `Verify` 仍可独立使用。
 
-1. 验证码应设置合理的过期时间（建议 2-5 分钟）
-2. 验证后立即删除验证码记录，防止重复使用
-3. 限制同一 IP 的验证码生成频率
-4. 记录验证失败次数，多次失败后增加难度或临时封禁
-5. 使用 HTTPS 传输验证码数据
+## 生成验证码
 
-## 依赖项
+推荐使用 `facades.Captcha().Generate`。它会按 `captcha.driver` 选择服务商，并将验证数据写入已初始化的默认 Redis 连接。
 
-- go-captcha（验证码生成库）
-- Redis（存储验证码数据）
-- Config facade（配置管理）
+```go
+package handler
 
-## 文件结构
+import (
+    "context"
 
+    "github.com/herhe-com/framework/facades"
+)
+
+func GenerateCaptcha(ctx context.Context) error {
+    result, err := facades.Captcha().Generate(ctx)
+    if err != nil {
+        return err
+    }
+
+    // result.Key：验证码标识，验证时原样提交
+    // result.Driver：click、slide 或 rotate
+    // result.Master：主图 Base64
+    // result.Thumb：提示图、滑块图或旋转缩略图 Base64
+    _ = result
+
+    return nil
+}
 ```
-captcha/
-├── application.go    # 验证码生成和验证逻辑
-└── provider.go       # 服务提供者
+
+返回结构：
+
+```json
+{
+  "key": "df62452fc5574fa59c465a6b80ec80e2",
+  "driver": "click",
+  "master": "...",
+  "thumb": "..."
+}
 ```
 
-## 性能优化
+当驱动为 `auto` 时，每次会从 `click`、`slide`、`rotate` 中随机选择一种，前端应根据返回的 `driver` 展示对应交互。
 
-1. 使用 Redis 缓存字体文件，避免重复加载
-2. 预生成验证码池，减少实时生成压力
-3. 使用 CDN 分发背景图片
-4. 压缩 Base64 图片大小
+## 验证验证码
+
+`facades.Captcha().Verify` 会根据 Redis 中保存的验证码类型选择对应服务商。验证成功后会删除 Redis 记录，验证码不能重复使用；验证失败时记录会保留到过期。
+
+```go
+package handler
+
+import (
+    "context"
+
+    captchacontract "github.com/herhe-com/framework/contracts/captcha"
+    "github.com/herhe-com/framework/facades"
+)
+
+func VerifyClick(ctx context.Context, key string) error {
+    return facades.Captcha().Verify(ctx, captchacontract.VerifyData{
+        Key: key,
+        Dots: []captchacontract.Dot{
+            {Index: 0, X: 100, Y: 150},
+            {Index: 1, X: 180, Y: 120},
+        },
+    })
+}
+
+func VerifySlide(ctx context.Context, key string, x int) error {
+    return facades.Captcha().Verify(ctx, captchacontract.VerifyData{Key: key, X: x})
+}
+
+func VerifyRotate(ctx context.Context, key string, angle int) error {
+    return facades.Captcha().Verify(ctx, captchacontract.VerifyData{Key: key, Angle: angle})
+}
+```
+
+对应的请求数据可以统一为：
+
+```json
+{
+  "key": "df62452fc5574fa59c465a6b80ec80e2",
+  "dots": [{"index": 0, "x": 100, "y": 150}],
+  "x": 0,
+  "angle": 0
+}
+```
+
+只需提交当前 `driver` 使用的字段：
+
+| 驱动 | 验证字段 | 说明 |
+| --- | --- | --- |
+| `click` | `dots` | 点击点数组，每个点包含 `index`、`x`、`y` |
+| `slide` | `x` | 滑块最终横坐标 |
+| `rotate` | `angle` | 用户旋转后的角度 |
+
+## 直接调用单一服务商
+
+应用可以像选择文件系统磁盘一样选择具体验证码驱动：
+
+```go
+driver, err := facades.Captcha().Driver(frameworkcaptcha.DriverSlide)
+if err != nil {
+    return err
+}
+
+challenge, err := driver.Generate()
+```
+
+驱动层只负责生成和校验，不会生成 `key`，也不会读写 Redis。`challenge.Target` 是内部正确答案，不能返回给前端。原有 `Click`、`Slide`、`Rotate` 及对应校验函数作为兼容入口继续保留。
+
+## Redis 要求
+
+调用 `Generate` 和 `Verify` 前必须初始化默认 Redis 连接。验证码记录使用以下键格式：
+
+```text
+{app.name}:captcha:{key}
+```
+
+`captcha.expire` 是推荐的有效期配置；为兼容旧配置，未设置时也会读取 `captcha.expiration`，最终默认值为 `300` 秒。
+
+## 错误处理
+
+以下情况会返回错误：
+
+- 配置了不支持的驱动
+- `captcha.expire` 小于或等于 `0`
+- 默认 Redis 未初始化
+- 验证码不存在或已过期
+- 用户提交的数据与目标不匹配
+- 已配置的自定义背景资源无法读取或解析

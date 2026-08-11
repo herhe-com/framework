@@ -14,7 +14,7 @@
 - `queue.yaml`：RabbitMQ 队列配置，使用 `default` 选择默认连接名，再用 `connections.<name>.driver`。
 - `search.yaml`：Elasticsearch、Meilisearch，使用 `default` 选择默认连接名，再用 `connections.<name>.driver`。
 - `ai.yaml`：OpenAI、Ollama。
-- `captcha.yaml`：点击式验证码。
+- `captcha.yaml`：点击、滑块、旋转验证码及默认驱动。
 - `validation.yaml`：字段标签和多语言翻译。
 - `microservice.yaml`：Snowflake 节点配置。
 - `crontab.yaml`：定时任务说明。

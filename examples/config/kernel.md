@@ -9,6 +9,7 @@ facades.Cfg.Add("kernel", map[string]any{
 	"providers": []service.Provider{
 		&orm.ServiceProvider{},
 		&redis.ServiceProvider{},
+		&captcha.ServiceProvider{},
 		&filesystem.ServiceProvider{},
 		&validation.ServiceProvider{},
 		&queue.ServiceProvider{},
@@ -37,5 +38,6 @@ facades.Cfg.Add("kernel", map[string]any{
 ## 说明
 
 - provider 顺序要和依赖顺序一致。
+- `captcha.ServiceProvider` 应放在 `redis.ServiceProvider` 之后。
 - 例如 `auth.ServiceProvider` 依赖数据库和 Casbin，必须放在 `orm.ServiceProvider` 之后。
 - `console.ServiceProvider` 需要先注册，`kernel.consoles` 才会被解析并执行。
