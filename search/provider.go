@@ -11,7 +11,7 @@ type ServiceProvider struct {
 }
 
 func (that *ServiceProvider) Register() error {
-	application, err := NewSearchWithError()
+	application, err := NewSearch()
 	if err != nil {
 		return err
 	}

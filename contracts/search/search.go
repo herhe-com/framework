@@ -1,17 +1,41 @@
 package search
 
+import "context"
+
+// Search manages configured search connections and their lifecycle.
 type Search interface {
 	Driver
-	Channel(name string) (Driver, error)
+	Default() Driver
+	Connection(name string) (Driver, error)
 }
 
+// Manager is an alias for Search for code that prefers the architectural name.
+type Manager = Search
+
+// Driver defines the operations whose semantics are shared by search engines.
 type Driver interface {
-	Index(index, data string) error                                 // 创建索引
-	Del(index string) error                                         // 删除索引
-	Save(index, key string, doc map[string]any) error               // 保存文档
-	Document(index, id string) (document map[string]any, err error) // 查询文档
-	Delete(index, id string) error                                  // 删除文档
-	Search(index, query string, request Request) (*Paginate, error) // 搜索
-	Dri() string                                                    // 获取驱动
-	Ping() (bool, error)                                            // 测试连接
+	DriverName() string
+	Ping(ctx context.Context) (*Response, error)
+	Search(ctx context.Context, index string, request SearchRequest) (*Response, error)
+	UpsertDocument(ctx context.Context, index, id string, request DocumentWriteRequest) (*Response, error)
+	GetDocument(ctx context.Context, index, id string, options RequestOptions) (*Response, error)
+	DeleteDocument(ctx context.Context, index, id string, options RequestOptions) (*Response, error)
+	Close(ctx context.Context) error
+}
+
+// ConnectionConfig is the engine-neutral configuration passed to a driver factory.
+type ConnectionConfig struct {
+	Name   string
+	Driver string
+	Prefix string
+	Values map[string]any
+}
+
+// Factory constructs a search driver from explicit connection configuration.
+type Factory func(config ConnectionConfig) (Driver, error)
+
+// Registry creates drivers registered under a driver name.
+type Registry interface {
+	Register(name string, factory Factory) error
+	Create(config ConnectionConfig) (Driver, error)
 }
