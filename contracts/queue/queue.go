@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -13,30 +14,31 @@ const (
 	DelayHeader = "x-delay"
 )
 
-// Handler processes a queue message body. A non-nil error triggers consumer retry handling.
-type Handler func(data []byte) error
+// ErrDisabled indicates that a queue is disabled by configuration.
+var ErrDisabled = errors.New("queue is disabled")
+
+// Handler processes a queue message body. The response is interpreted by the
+// active driver. A nil response uses the driver's default acknowledgement.
+// A non-nil error triggers consumer retry handling.
+type Handler func(data []byte) (response any, err error)
 
 // Headers contains transport-neutral message headers.
 type Headers map[string]any
 
-// ProducerOptions describes where and how a message is published.
-type ProducerOptions struct {
-	Topic   string
-	Queue   string
-	Routes  []string
-	Delay   time.Duration
-	TTL     time.Duration
-	Headers Headers
-}
+// MergeHeaders combines message headers. Later values replace earlier values.
+func MergeHeaders(headers ...Headers) Headers {
+	var merged Headers
 
-// ConsumerOptions describes a queue subscription.
-type ConsumerOptions struct {
-	Topic   string
-	Queue   string
-	Route   string
-	Delayed bool
-	TTL     time.Duration
-	Retry   int
+	for _, values := range headers {
+		for key, value := range values {
+			if merged == nil {
+				merged = make(Headers)
+			}
+			merged[key] = value
+		}
+	}
+
+	return merged
 }
 
 // RetryCount returns the completed retry count stored in headers.
@@ -82,6 +84,28 @@ func RetryDelay(headers Headers) time.Duration {
 	return time.Duration(milliseconds) * time.Millisecond
 }
 
+// RetryAfter returns the wait before the next requeue for a message that has
+// already completed retried attempts. ok is false when retries are exhausted.
+// The length of retry is the maximum number of requeues.
+func RetryAfter(retry []time.Duration, retried int) (wait time.Duration, ok bool) {
+	if retried < 0 || retried >= len(retry) {
+		return 0, false
+	}
+
+	return retry[retried], true
+}
+
+// HasPositiveRetryDelay reports whether any configured retry step waits.
+func HasPositiveRetryDelay(retry []time.Duration) bool {
+	for _, wait := range retry {
+		if wait > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func headerInt64(headers Headers, key string) (int64, bool) {
 	value, exists := headers[key]
 	if !exists || value == nil {
@@ -108,7 +132,7 @@ type Queue interface {
 }
 
 type Driver interface {
-	Producer(body []byte, options ProducerOptions) error
-	Consumer(handler Handler, options ConsumerOptions) error
+	Producer(body []byte, key string, headers ...Headers) error
+	Consumer(handler Handler, key string) error
 	Close() error
 }

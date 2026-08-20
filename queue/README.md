@@ -1,16 +1,15 @@
 # Queue 组件
 
-`queue` 提供 RabbitMQ 和 NATS 队列封装。
+`queue` 提供 RabbitMQ 和 NATS 队列封装。连接配置只描述消息服务器，具体的 topic、queue、routes、delay、ttl 等参数放在 `queue.queues.<key>`，业务代码只传队列 key。
 
 ## 配置
 
-`queue.ServiceProvider` 会读取 `queue.default` 选择默认队列连接名，并按 `queue.connections.<name>` 初始化默认队列驱动。每个连接实例都需要自己的 `driver` 字段：
-
 ```yaml
 queue:
-  default: default
+  default: rabbit
+
   connections:
-    default:
+    rabbit:
       driver: rabbitmq
       host: 127.0.0.1
       port: 5672
@@ -18,14 +17,7 @@ queue:
       password: guest
       vhost: /
       error: basic_error
-```
 
-NATS 使用 core NATS subject 和 queue group：
-
-```yaml
-queue:
-  default: events
-  connections:
     events:
       driver: nats
       url: nats://127.0.0.1:4222
@@ -38,15 +30,78 @@ queue:
       stream: FRAMEWORK_QUEUE
       schedule_prefix: _framework.queue.schedule
       retention: 1h
+
+  queues:
+    email:
+      enable: true
+      connection: rabbit
+      topic: basic
+      queue: basic_email
+      routes: [email]
+      delay: 0s
+      ttl: 10m
+      retry: [1m, 5m, 30m]
+      concurrency: 10
+      error_enable: true
+      error: basic_error
+      headers:
+        source: framework
+
+    audit:
+      enable: true
+      connection: events
+      topic: events
+      queue: audit_workers
+      routes: [created, updated]
+      delayed: false
+      delay: 0s
+      ttl: 1h
+      retry: [1m, 5m]
+      error_enable: true
+      stream: FRAMEWORK_AUDIT
+      schedule_prefix: _framework.queue.schedule
+      retention: 2h
 ```
 
-未设置 `url` 时，也可以用 `host` 和 `port`，默认分别为 `127.0.0.1` 和 `4222`。认证按 `credentials`、`token`、`username/password` 的顺序选择。延迟消息和 Producer/Consumer TTL 要求 NATS 服务端启用 JetStream；延迟消息还要求服务端支持消息调度。
+- `enable` 控制单个队列，缺省为 `true`。关闭后 `Producer` 和 `Consumer` 返回可通过 `errors.Is(err, queue.ErrDisabled)` 判断的错误。
+- `connection` 指向 `queue.connections.<name>`；不设置时使用 `queue.default`。
+- `error_enable` 控制消费者重试耗尽后是否发送失败消息，缺省为 `true`；设为 `false` 时仍按 handler 返回值应答原消息。
+- `connections` 只保存服务器连接参数。RabbitMQ/NATS 专属队列字段从 `queue.queues.<key>` 读取。
+- 时长字段支持 Go duration，例如 `500ms`、`30s`、`10m`、`1h`；纯数字按秒解释。
+- 服务连接按首次使用惰性创建；关闭的队列不会触发连接。
 
-注意：必须保留 `connections` 这一层。`queue.default` 只保存连接名，驱动类型从 `queue.connections.<name>.driver` 读取。
+### RabbitMQ 队列字段
+
+- `topic`: exchange，缺省为 `queue`。
+- `queue`: 队列名，缺省为队列 key。
+- `routes`: routing key 列表；也可以使用单个 `route`。缺省为队列名。
+- `delay`: 首次生产延迟；大于 `0` 时业务 exchange 使用 `x-delayed-message`。与消费失败重试无关。
+- `delayed`: 强制消费者使用延迟 exchange；通常配置了 `delay` 后无需单独设置。
+- `ttl`: 消息 TTL，并配置死信 exchange。语义是过期/死信，不是重试等待。
+- `retry`: 消费失败后的阶梯重试。数组长度是最大重试次数，每一项是对应次数的等待时间，例如 `[1m, 5m, 30m]` 表示最多重试 3 次，间隔 1 分钟 / 5 分钟 / 30 分钟。兼容旧写法 `retry: 3`（重试 3 次、间隔 0，立刻再投）。`retry: false` 显式关闭重试（不重投，失败走 error 流程）。
+- `concurrency`: 消费并发数，默认 `10`。
+- `error`: 最终失败消息队列，依次回退到连接级 `error` 和 `basic_error`。
+- `headers`: 每次生产默认附带的消息头；调用 `Producer` 时传入的 header 会覆盖同名配置。
+- `publisher_options`、`publish_options`、`consumer_options`: Go 配置中可传对应的 `go-rabbitmq` option 函数；连接级默认值仍放在 `queue.connections.<name>.default`。
+
+阶梯重试（`retry` 中存在大于 `0` 的等待）通过共享 delay exchange `_framework.queue.delay`（`x-delayed-message`）回投业务队列，**不会**把业务 `topic` 改成 delayed 类型。成功路径仍走业务 exchange。需要 RabbitMQ 安装 delayed message 插件。若配置了 `ttl`，请保证它不会短于最大重试等待，否则消息可能在延迟等待中过期。
+
+### NATS 队列字段
+
+- `topic` 与 `routes` 使用点号组成 subject。例如 `events` + `created` 为 `events.created`。
+- `queue`: queue group，同时用于 durable consumer 名称；缺省为队列 key。
+- `routes`: subject 后缀列表；也可以使用单个 `route`。没有 route 时直接使用 `topic`，没有 topic 时退回 `queue`。
+- `delay` / `delayed`、`ttl`: 启用 JetStream 延迟、消息 TTL 或消费 TTL。`delay` 只影响首次生产。
+- `retry`: 与 RabbitMQ 相同，数组长度 = 最大重试次数，元素为阶梯等待。兼容 `retry: 3`；`retry: false` 关闭重试。
+- `error`: 最终失败 subject，依次回退到连接级 `error` 和 `basic_error`。
+- `stream`、`schedule_prefix`、`retention`: 可按队列覆盖连接级 JetStream 参数。
+- `headers`: 默认 NATS headers；运行时 header 会覆盖同名配置。
+
+NATS 延迟消息要求服务端支持 JetStream 消息调度。`delay=0` 且 `ttl=0` 的普通队列使用 core NATS；设置 `delayed` 或 `ttl` 时使用 durable JetStream consumer。消费失败后的阶梯重试若等待大于 `0`，会通过 JetStream schedule 回投业务 subject（即使该队列平时走 core 消费）。
 
 ## 使用
 
-发送消息：
+发送消息只需要队列 key：
 
 ```go
 body, err := json.Marshal(map[string]any{
@@ -57,46 +112,61 @@ if err != nil {
 	return err
 }
 
-err = facades.Queue().Producer(body, queue.ProducerOptions{
-	Topic:  "basic",
-	Queue:  "basic_email",
-	Routes: []string{"email"},
+err = facades.Queue().Producer(body, "email", queue.Headers{
+	"trace-id": "request-1",
 })
 ```
 
 消费消息：
 
 ```go
-handler := func(data []byte) error {
+err := facades.Queue().Consumer(func(data []byte) (any, error) {
 	var message map[string]any
 	if err := json.Unmarshal(data, &message); err != nil {
-		return err
+		return nil, err
 	}
 
+	return nil, nil
+}, "email")
+```
+
+通过 `consumer` 命令统一启动消费者时，在 `queue.consumes` 中注册 `queue.Consumer`：
+
+```go
+type EmailConsumer struct{}
+
+func (*EmailConsumer) Key() string {
+	return "email"
+}
+
+func (*EmailConsumer) Prepare() error {
 	return nil
 }
 
-err := facades.Queue().Consumer(handler, queue.ConsumerOptions{
-	Topic: "basic",
-	Queue: "basic_email",
-	Route: "email",
-	Retry: 3,
+func (*EmailConsumer) Handle(data []byte) (any, error) {
+	return nil, nil
+}
+
+facades.Config().Set("queue.consumes", []queue.Consumer{
+	&EmailConsumer{},
 })
 ```
 
-切换连接：
+这里的 `queue.Consumer` 来自框架根 `queue` 包；也可以直接使用 `contracts/queue.Consumer`。
+
+命令会根据 `Key()` 自动读取 `queue.queues.<key>.connection`，未配置时使用 `queue.default`；连接成功后先执行 `Prepare()`，再在协程中启动 `Handle()` 消费，并在退出时关闭连接。
+
+handler 的第一个返回值是驱动应答码，`nil` 表示默认应答：RabbitMQ 默认为 `rabbitmq.Ack`，NATS JetStream 默认为 `nats.Ack`。
+
+RabbitMQ 可返回 `github.com/herhe-com/framework/queue/rabbitmq` 导出的 `Ack`、`NackDiscard` 或 `NackRequeue`：
 
 ```go
-rabbitmqReport, err := facades.Queue().Channel("report")
-if err != nil {
-	return err
-}
-
-natsEvents, err := facades.Queue().Channel("events")
-if err != nil {
-	return err
-}
+return rabbitmq.NackRequeue, nil
 ```
+
+NATS JetStream 可返回 `nats.Ack`、`nats.Nak` 或 `nats.Term`。core NATS 沉默忽略应答码，因为协议本身没有消费确认。
+
+handler 返回非 `nil error` 时进入配置的重试流程：读取消息头 `x-retry`（已完成次数），若仍小于 `len(retry)`，则等待 `retry[x-retry]` 后重新投递并把 `x-retry` 加 1；次数耗尽后按 `error_enable` 写入失败队列。应答码在重新发布或错误消息发布成功后决定原消息如何确认。重新发布/错误消息发布失败时驱动会优先要求服务端重投。
 
 ## 接口
 
@@ -106,64 +176,21 @@ type Queue interface {
 	Channel(name string) (Driver, error)
 }
 
-type Handler func(data []byte) error
+type Handler func(data []byte) (response any, err error)
+
+type Consumer interface {
+	Key() string
+	Prepare() error
+	Handle(data []byte) (response any, err error)
+}
 
 type Headers map[string]any
 
-type ProducerOptions struct {
-	Topic   string
-	Queue   string
-	Routes  []string
-	Delay   time.Duration
-	TTL     time.Duration
-	Headers Headers
-}
-
-type ConsumerOptions struct {
-	Topic   string
-	Queue   string
-	Route   string
-	Delayed bool
-	TTL     time.Duration
-	Retry   int
-}
-
 type Driver interface {
-	Producer(body []byte, options ProducerOptions) error
-	Consumer(handler Handler, options ConsumerOptions) error
+	Producer(body []byte, key string, headers ...Headers) error
+	Consumer(handler Handler, key string) error
 	Close() error
 }
 ```
 
-参数说明：
-
-- `Topic`: 逻辑主题；RabbitMQ 映射为 exchange，NATS 映射为 subject 前缀。
-- `Queue`: 队列或消费组；RabbitMQ 映射为 queue，NATS 映射为 queue group 和 durable consumer 名称来源。
-- `Route` / `Routes`: 主题下的路由；NATS 会与 `Topic` 用点号拼成 subject。
-- `Delay`: 延迟时长；RabbitMQ 使用 `x-delayed-message`，NATS 使用 JetStream 原生消息调度。
-- `Delayed`: Consumer 是否订阅延迟队列。
-- `TTL`: 消息存活时长。RabbitMQ 到期后走死信交换机；NATS 到期后直接删除消息，不做死信转发。
-- `Retry`: 仅当 Consumer handler 返回非 `nil error` 时，重新发布回原队列的最大次数；处理成功不会重试。
-- `Headers`: RabbitMQ 会原样传递；NATS 会把值转换为文本 header。
-
-RabbitMQ 和 NATS 使用 `x-retry` header 记录已经完成的业务重试次数。只有 Consumer handler 返回非 `nil error` 才会进入重试流程；初次消费没有该 header，第一次处理失败后重新发布的消息为 `x-retry=1`。RabbitMQ 和 NATS JetStream 只有重新发布成功后才确认原消息；达到 `ConsumerOptions.Retry` 后不再重新发布，而是发送到错误队列。延迟消息重试时会通过内部 `x-delay` header 保留原延迟。core NATS 没有确认机制，重新发布失败时会记录错误并尝试发送错误消息。重新发布失败、错误消息发布失败或 Ack 失败属于基础设施异常，不增加 `x-retry`。
-
-## NATS 映射
-
-- `Topic` 和 `Route` 用点号拼成 subject，例如 `events` + `created` 会发布或订阅 `events.created`；如果 `Topic` 为空，`Route` 可直接传完整 subject。
-- `Queue` 是消费者的 queue group；多个同组消费者中只有一个会收到每条消息。
-- `Routes` 有多个值时，生产者会向每个 subject 各发布一次。
-- `Delay > 0` 时，驱动通过 JetStream `WithScheduleAt` 在服务端持久化调度；对应 Consumer 需要把 `Delayed` 设为 `true`，使用 durable JetStream consumer 接收和确认消息。若同时设置 `TTL`，TTL 从消息实际投递后开始计算。
-- Producer 的 `TTL > 0` 通过 JetStream per-message TTL 实现。消息到期后从流中删除，NATS 不提供 RabbitMQ 式的死信转发。
-- Consumer 的 `TTL > 0` 通过 JetStream 流的 `MaxAge` 实现，并自动切换为 durable JetStream consumer。同一流上的 TTL 是共享配置，多个 Consumer 设置不同值时以最短 TTL 为准。
-- 驱动会自动创建或扩展 `stream` 配置的流，默认名为 `FRAMEWORK_QUEUE`。调度控制 subject 使用 `schedule_prefix`；`TTL=0` 的延迟消息使用 `retention` 作为投递后的保留时间，默认 `1h`。
-- `Delay=0` 且 `TTL=0` 的普通消息和消费者仍使用 core NATS；Consumer 设置 `Delayed` 或 `TTL` 时，`Queue` 不能为空。
-- NATS 的业务重试次数只由 `x-retry` 判断，每次失败都会产生一条重新入队的新消息；JetStream 的服务端重投递只用于重新发布或错误消息发布失败等基础设施异常。
-- 最终失败消息会发布到 `error` 配置的 subject，默认 `basic_error`。
-
-## 注意事项
-
-- 延迟、TTL、重试和 headers 统一通过 `ProducerOptions` / `ConsumerOptions` 配置。
-- RabbitMQ 的 `Producer` 每次调用会创建 publisher；高频场景需要评估连接和 publisher 生命周期成本。
-- 如果消费失败且超过重试次数，会把错误信息投递到 `error` 配置的 RabbitMQ 队列或 NATS subject，默认 `basic_error`。
-- 如果 example 基础项目没有注册 `queue.ServiceProvider`，队列配置即使存在也不会实际初始化。
+`Channel(name)` 仍可显式取得某个连接驱动，但驱动的 `Producer` / `Consumer` 同样接收 `queue.queues.<key>`，且会校验该 key 的 `connection` 是否与当前驱动一致。

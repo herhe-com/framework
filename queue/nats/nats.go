@@ -19,11 +19,24 @@ import (
 	"github.com/spf13/viper"
 
 	contractqueue "github.com/herhe-com/framework/contracts/queue"
+	queueconfig "github.com/herhe-com/framework/queue/config"
 )
 
 const (
 	managedStreamMetadata     = "framework.queue.managed"
 	consumerTTLStreamMetadata = "framework.queue.consumer_ttl"
+)
+
+// Action controls how a JetStream message is acknowledged.
+type Action int
+
+const (
+	// Ack acknowledges a successfully processed message.
+	Ack Action = iota
+	// Nak asks JetStream to redeliver the message.
+	Nak
+	// Term stops redelivery of the message.
+	Term
 )
 
 type streamBinding struct {
@@ -38,21 +51,44 @@ type NATS struct {
 	conn     *natsgo.Conn
 	js       jetstream.JetStream
 	cfg      *viper.Viper
+	name     string
 	done     chan struct{}
 	doneOnce sync.Once
 	streamMu sync.Mutex
 	streams  map[string]streamBinding
 }
 
+type queueOptions struct {
+	topic          string
+	queue          string
+	routes         []string
+	delay          time.Duration
+	ttl            time.Duration
+	delayed        bool
+	retry          []time.Duration
+	headers        contractqueue.Headers
+	errorEnabled   bool
+	errorSubject   string
+	stream         string
+	schedulePrefix string
+	retention      time.Duration
+}
+
 var _ contractqueue.Driver = (*NATS)(nil)
 
 // NewNATS creates and connects a NATS queue driver.
-func NewNATS(configs map[string]any) (*NATS, error) {
+func NewNATS(configs map[string]any, names ...string) (*NATS, error) {
+	name := ""
+	if len(names) > 0 && strings.TrimSpace(names[0]) != "" {
+		name = strings.TrimSpace(names[0])
+	}
+
 	cfg := viper.New()
 	cfg.Set("nats", configs)
 
 	driver := &NATS{
 		cfg:     cfg,
+		name:    name,
 		done:    make(chan struct{}),
 		streams: make(map[string]streamBinding),
 	}
@@ -120,24 +156,43 @@ func (r *NATS) options() []natsgo.Option {
 	return options
 }
 
-// Producer publishes the message to every topic-and-route NATS subject.
-func (r *NATS) Producer(data []byte, options contractqueue.ProducerOptions) error {
+// Producer publishes a message using queue.queues.<key>.
+func (r *NATS) Producer(data []byte, key string, headers ...contractqueue.Headers) error {
+	options, err := r.queueOptions(key)
+	if err != nil {
+		return err
+	}
+
+	return r.publish(
+		data,
+		publishSubjects(options.topic, options.queue, options.routes),
+		options,
+		contractqueue.MergeHeaders(options.headers, contractqueue.MergeHeaders(headers...)),
+	)
+}
+
+func (r *NATS) publish(
+	data []byte,
+	subjects []string,
+	options queueOptions,
+	headers contractqueue.Headers,
+) error {
 	if r.conn == nil || r.conn.IsClosed() {
 		return natsgo.ErrConnectionClosed
 	}
 
-	subjects := publishSubjects(options.Topic, options.Queue, options.Routes)
 	if len(subjects) == 0 {
 		return errors.New("nats: subject is required")
 	}
-	if options.Delay > 0 {
+	if options.delay > 0 {
 		for _, subject := range subjects {
 			if err := r.publishDelayed(
 				data,
 				subject,
-				options.Delay,
-				options.TTL,
-				options.Headers,
+				options.delay,
+				options.ttl,
+				headers,
+				options,
 			); err != nil {
 				return err
 			}
@@ -145,9 +200,9 @@ func (r *NATS) Producer(data []byte, options contractqueue.ProducerOptions) erro
 
 		return nil
 	}
-	if options.TTL > 0 {
+	if options.ttl > 0 {
 		for _, subject := range subjects {
-			if err := r.publishWithTTL(data, subject, options.TTL, options.Headers); err != nil {
+			if err := r.publishWithTTL(data, subject, options.ttl, headers, options); err != nil {
 				return err
 			}
 		}
@@ -158,7 +213,7 @@ func (r *NATS) Producer(data []byte, options contractqueue.ProducerOptions) erro
 	for _, subject := range subjects {
 		message := natsgo.NewMsg(subject)
 		message.Data = data
-		setHeaders(message, options.Headers)
+		setHeaders(message, headers)
 
 		if err := r.conn.PublishMsg(message); err != nil {
 			return err
@@ -168,61 +223,65 @@ func (r *NATS) Producer(data []byte, options contractqueue.ProducerOptions) erro
 	return r.conn.Flush()
 }
 
-// Consumer consumes through core NATS or a durable JetStream consumer and blocks until Close is called.
-func (r *NATS) Consumer(handler contractqueue.Handler, options contractqueue.ConsumerOptions) error {
+// Consumer consumes through core NATS or durable JetStream consumers and blocks until Close is called.
+func (r *NATS) Consumer(handler contractqueue.Handler, key string) error {
 	if handler == nil {
 		return errors.New("nats: handler is required")
 	}
 	if r.conn == nil || r.conn.IsClosed() {
 		return natsgo.ErrConnectionClosed
 	}
-	if options.Retry < 0 {
-		options.Retry = 0
+
+	options, err := r.queueOptions(key)
+	if err != nil {
+		return err
 	}
 
-	subject := subject(options.Topic, options.Route)
-	if subject == "" {
+	subjects := publishSubjects(options.topic, options.queue, options.routes)
+	if len(subjects) == 0 {
 		return errors.New("nats: subject is required")
 	}
-	if options.Delayed || options.TTL > 0 {
-		return r.consumeJetStream(handler, subject, options)
+	if options.delayed || options.ttl > 0 {
+		return r.consumeJetStream(handler, subjects, options)
 	}
 
 	callback := func(message *natsgo.Msg) {
 		headers := headersFromNATS(message.Header)
 		retried := contractqueue.RetryCount(headers)
-		consumeErr := handler(message.Data)
+		_, consumeErr := handler(message.Data)
 		if consumeErr == nil {
 			return
 		}
-		if retried < options.Retry {
-			if retryErr := r.requeue(message.Data, headers, options, retried); retryErr == nil {
+		if _, ok := contractqueue.RetryAfter(options.retry, retried); ok {
+			if retryErr := r.requeue(message.Data, headers, message.Subject, options, retried); retryErr == nil {
 				return
 			} else {
 				color.Errorf("[queue.nats] requeue message: %v", retryErr)
 			}
 		}
 
-		if publishErr := r.publishError(
-			message.Data,
-			options.Topic,
-			options.Queue,
-			options.Route,
-			retried,
-			consumeErr,
-		); publishErr != nil {
-			color.Errorf("[queue.nats] publish error message: %v", publishErr)
+		if options.errorEnabled {
+			if publishErr := r.publishError(
+				message.Data,
+				options,
+				message.Subject,
+				retried,
+				consumeErr,
+			); publishErr != nil {
+				color.Errorf("[queue.nats] publish error message: %v", publishErr)
+			}
 		}
 	}
 
-	var err error
-	if options.Queue == "" {
-		_, err = r.conn.Subscribe(subject, callback)
-	} else {
-		_, err = r.conn.QueueSubscribe(subject, options.Queue, callback)
-	}
-	if err != nil {
-		return err
+	for _, subject := range subjects {
+		if options.queue == "" {
+			_, err = r.conn.Subscribe(subject, callback)
+		} else {
+			_, err = r.conn.QueueSubscribe(subject, options.queue, callback)
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	if err = r.conn.Flush(); err != nil {
@@ -233,11 +292,17 @@ func (r *NATS) Consumer(handler contractqueue.Handler, options contractqueue.Con
 	return r.conn.LastError()
 }
 
-func (r *NATS) publishWithTTL(data []byte, target string, ttl time.Duration, headers contractqueue.Headers) error {
+func (r *NATS) publishWithTTL(
+	data []byte,
+	target string,
+	ttl time.Duration,
+	headers contractqueue.Headers,
+	options queueOptions,
+) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if _, _, err := r.ensureStream(ctx, target, ttl, false, 0); err != nil {
+	if _, _, err := r.ensureStream(ctx, target, ttl, false, 0, options); err != nil {
 		return err
 	}
 
@@ -249,12 +314,18 @@ func (r *NATS) publishWithTTL(data []byte, target string, ttl time.Duration, hea
 	return err
 }
 
-func (r *NATS) publishDelayed(data []byte, target string, delay, ttl time.Duration, headers contractqueue.Headers) error {
+func (r *NATS) publishDelayed(
+	data []byte,
+	target string,
+	delay, ttl time.Duration,
+	headers contractqueue.Headers,
+	options queueOptions,
+) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ttl = r.delayedMessageTTL(ttl)
-	_, scheduleSubject, err := r.ensureStream(ctx, target, delay+ttl, true, 0)
+	ttl = options.delayedMessageTTL(ttl)
+	_, scheduleSubject, err := r.ensureStream(ctx, target, delay+ttl, true, 0, options)
 	if err != nil {
 		return err
 	}
@@ -284,78 +355,88 @@ func (r *NATS) publishDelayed(data []byte, target string, delay, ttl time.Durati
 
 func (r *NATS) consumeJetStream(
 	handler contractqueue.Handler,
-	subject string,
-	options contractqueue.ConsumerOptions,
+	subjects []string,
+	options queueOptions,
 ) error {
-	if options.Queue == "" {
+	if options.queue == "" {
 		return errors.New("nats: queue is required for JetStream consumers")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	consumeContexts := make([]jetstream.ConsumeContext, 0, len(subjects))
+	defer func() {
+		for _, consumeContext := range consumeContexts {
+			consumeContext.Stop()
+		}
+	}()
 
-	streamName, _, err := r.ensureStream(ctx, subject, 0, options.Delayed, options.TTL)
-	if err != nil {
-		return err
-	}
-
-	consumer, err := r.js.CreateOrUpdateConsumer(ctx, streamName, jetstream.ConsumerConfig{
-		Durable:       consumerName(options.Queue, subject),
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		FilterSubject: subject,
-		MaxDeliver:    -1,
-	})
-	if err != nil {
-		return err
-	}
-
-	consumeContext, err := consumer.Consume(func(message jetstream.Msg) {
-		headers := headersFromNATS(message.Headers())
-		retried := contractqueue.RetryCount(headers)
-		consumeErr := handler(message.Data())
-		if consumeErr == nil {
-			if ackErr := message.Ack(); ackErr != nil {
-				color.Errorf("[queue.nats] acknowledge JetStream message: %v", ackErr)
-			}
-			return
+	for _, subject := range subjects {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		streamName, _, err := r.ensureStream(ctx, subject, 0, options.delayed, options.ttl, options)
+		if err != nil {
+			cancel()
+			return err
 		}
 
-		if retried < options.Retry {
-			if retryErr := r.requeue(message.Data(), headers, options, retried); retryErr != nil {
-				color.Errorf("[queue.nats] requeue JetStream message: %v", retryErr)
-				if nakErr := message.Nak(); nakErr != nil {
-					color.Errorf("[queue.nats] retry JetStream message: %v", nakErr)
+		consumer, err := r.js.CreateOrUpdateConsumer(ctx, streamName, jetstream.ConsumerConfig{
+			Durable:       consumerName(options.queue, subject),
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			FilterSubject: subject,
+			MaxDeliver:    -1,
+		})
+		cancel()
+		if err != nil {
+			return err
+		}
+
+		consumeContext, err := consumer.Consume(func(message jetstream.Msg) {
+			headers := headersFromNATS(message.Headers())
+			retried := contractqueue.RetryCount(headers)
+			response, consumeErr := handler(message.Data())
+			if consumeErr == nil {
+				if ackErr := acknowledge(message, response); ackErr != nil {
+					color.Errorf("[queue.nats] acknowledge JetStream message: %v", ackErr)
 				}
 				return
 			}
 
-			if ackErr := message.Ack(); ackErr != nil {
-				color.Errorf("[queue.nats] acknowledge requeued JetStream message: %v", ackErr)
+			if _, ok := contractqueue.RetryAfter(options.retry, retried); ok {
+				if retryErr := r.requeue(message.Data(), headers, message.Subject(), options, retried); retryErr != nil {
+					color.Errorf("[queue.nats] requeue JetStream message: %v", retryErr)
+					if nakErr := message.Nak(); nakErr != nil {
+						color.Errorf("[queue.nats] retry JetStream message: %v", nakErr)
+					}
+					return
+				}
+
+				if ackErr := acknowledge(message, response); ackErr != nil {
+					color.Errorf("[queue.nats] acknowledge requeued JetStream message: %v", ackErr)
+				}
+				return
 			}
-			return
-		}
 
-		if publishErr := r.publishError(
-			message.Data(),
-			options.Topic,
-			options.Queue,
-			options.Route,
-			retried,
-			consumeErr,
-		); publishErr != nil {
-			color.Errorf("[queue.nats] publish error message: %v", publishErr)
-			_ = message.Nak()
-			return
-		}
+			if options.errorEnabled {
+				if publishErr := r.publishError(
+					message.Data(),
+					options,
+					message.Subject(),
+					retried,
+					consumeErr,
+				); publishErr != nil {
+					color.Errorf("[queue.nats] publish error message: %v", publishErr)
+					_ = message.Nak()
+					return
+				}
+			}
 
-		if ackErr := message.Ack(); ackErr != nil {
-			color.Errorf("[queue.nats] acknowledge failed JetStream message: %v", ackErr)
+			if ackErr := acknowledge(message, response); ackErr != nil {
+				color.Errorf("[queue.nats] acknowledge failed JetStream message: %v", ackErr)
+			}
+		})
+		if err != nil {
+			return err
 		}
-	})
-	if err != nil {
-		return err
+		consumeContexts = append(consumeContexts, consumeContext)
 	}
-	defer consumeContext.Stop()
 
 	<-r.done
 	return r.conn.LastError()
@@ -364,22 +445,23 @@ func (r *NATS) consumeJetStream(
 func (r *NATS) requeue(
 	data []byte,
 	headers contractqueue.Headers,
-	options contractqueue.ConsumerOptions,
+	subject string,
+	options queueOptions,
 	retried int,
 ) error {
-	delay := time.Duration(0)
-	if options.Delayed {
-		delay = contractqueue.RetryDelay(headers)
+	wait, ok := contractqueue.RetryAfter(options.retry, retried)
+	if !ok {
+		return fmt.Errorf("nats: retries exhausted")
 	}
 
-	return r.Producer(data, contractqueue.ProducerOptions{
-		Topic:   options.Topic,
-		Queue:   options.Queue,
-		Routes:  []string{options.Route},
-		Delay:   delay,
-		TTL:     options.TTL,
-		Headers: contractqueue.WithRetryCount(headers, retried+1),
-	})
+	// Tiered retry delay is independent of the original produce delay.
+	options.delay = wait
+	return r.publish(
+		data,
+		[]string{subject},
+		options,
+		contractqueue.WithRetryCount(headers, retried+1),
+	)
 }
 
 func (r *NATS) ensureStream(
@@ -388,6 +470,7 @@ func (r *NATS) ensureStream(
 	minimumAge time.Duration,
 	scheduling bool,
 	consumerTTL time.Duration,
+	options queueOptions,
 ) (string, string, error) {
 	r.streamMu.Lock()
 	defer r.streamMu.Unlock()
@@ -406,7 +489,7 @@ func (r *NATS) ensureStream(
 		return "", "", fmt.Errorf("nats: find stream for subject %s: %w", target, err)
 	}
 	if !targetExists {
-		streamName = r.cfg.GetString("nats.stream")
+		streamName = options.stream
 		if streamName == "" {
 			streamName = "FRAMEWORK_QUEUE"
 		}
@@ -414,7 +497,7 @@ func (r *NATS) ensureStream(
 
 	scheduleSubject := ""
 	if scheduling || (cached && binding.schedule != "") {
-		scheduleSubject = r.scheduleSubject(streamName)
+		scheduleSubject = options.scheduleSubject(streamName)
 	}
 	if scheduling && scheduleSubject == target {
 		return "", "", errors.New("nats: schedule subject must differ from target subject")
@@ -422,7 +505,7 @@ func (r *NATS) ensureStream(
 
 	stream, err := r.js.Stream(ctx, streamName)
 	if errors.Is(err, jetstream.ErrStreamNotFound) {
-		maxAge := r.streamMaxAge(minimumAge)
+		maxAge := options.streamMaxAge(minimumAge)
 		metadata := map[string]string{managedStreamMetadata: "true"}
 		if consumerTTL > 0 {
 			maxAge = consumerTTL
@@ -510,7 +593,7 @@ func (r *NATS) ensureStream(
 				changed = true
 			}
 		} else {
-			maxAge := r.streamMaxAge(minimumAge)
+			maxAge := options.streamMaxAge(minimumAge)
 			if config.MaxAge > 0 && config.MaxAge < maxAge {
 				config.MaxAge = maxAge
 				changed = true
@@ -557,39 +640,24 @@ func (r *NATS) ensureStream(
 	return streamName, scheduleSubject, nil
 }
 
-func (r *NATS) scheduleSubject(stream string) string {
-	prefix := r.cfg.GetString("nats.schedule_prefix")
-	if prefix == "" {
-		prefix = "_framework.queue.schedule"
-	}
-
-	return strings.Trim(prefix, ".") + "." + stream
+func (r queueOptions) scheduleSubject(stream string) string {
+	return strings.Trim(r.schedulePrefix, ".") + "." + stream
 }
 
-func (r *NATS) retention() time.Duration {
-	retention := r.cfg.GetDuration("nats.retention")
-	if retention <= 0 {
-		retention = time.Hour
-	}
-
-	return retention
-}
-
-func (r *NATS) delayedMessageTTL(ttl time.Duration) time.Duration {
+func (r queueOptions) delayedMessageTTL(ttl time.Duration) time.Duration {
 	if ttl > 0 {
 		return ttl
 	}
 
-	return r.retention()
+	return r.retention
 }
 
-func (r *NATS) streamMaxAge(minimumAge time.Duration) time.Duration {
-	retention := r.retention()
-	if minimumAge > retention {
+func (r queueOptions) streamMaxAge(minimumAge time.Duration) time.Duration {
+	if minimumAge > r.retention {
 		return minimumAge
 	}
 
-	return retention
+	return r.retention
 }
 
 func streamConsumerTTL(metadata map[string]string) time.Duration {
@@ -631,15 +699,16 @@ func (r *NATS) Close() error {
 	return nil
 }
 
-func (r *NATS) publishError(data []byte, topic, queue, route string, retried int, consumeErr error) error {
-	errorSubject := r.cfg.GetString("nats.error")
-	if errorSubject == "" {
-		errorSubject = "basic_error"
-	}
-
+func (r *NATS) publishError(
+	data []byte,
+	options queueOptions,
+	route string,
+	retried int,
+	consumeErr error,
+) error {
 	body, err := json.Marshal(contractqueue.BasicError{
-		Exchange: topic,
-		Queue:    queue,
+		Exchange: options.topic,
+		Queue:    options.queue,
 		Route:    route,
 		Retry:    retried,
 		Message:  string(data),
@@ -649,13 +718,118 @@ func (r *NATS) publishError(data []byte, topic, queue, route string, retried int
 		return err
 	}
 
-	message := natsgo.NewMsg(errorSubject)
+	message := natsgo.NewMsg(options.errorSubject)
 	message.Data = body
 	if err = r.conn.PublishMsg(message); err != nil {
 		return err
 	}
 
 	return r.conn.Flush()
+}
+
+func (r *NATS) queueOptions(key string) (queueOptions, error) {
+	config, err := queueconfig.Load(key)
+	if err != nil {
+		return queueOptions{}, err
+	}
+	if err = config.EnsureEnabled(); err != nil {
+		return queueOptions{}, err
+	}
+	if r.name != "" && config.Connection != r.name {
+		return queueOptions{}, fmt.Errorf(
+			"queue %s uses connection %s, not %s",
+			key,
+			config.Connection,
+			r.name,
+		)
+	}
+
+	delay, err := config.Duration("delay", 0)
+	if err != nil {
+		return queueOptions{}, err
+	}
+	ttl, err := config.Duration("ttl", 0)
+	if err != nil {
+		return queueOptions{}, err
+	}
+	retention, err := config.Duration("retention", r.cfg.GetDuration("nats.retention"))
+	if err != nil {
+		return queueOptions{}, err
+	}
+	if retention <= 0 {
+		retention = time.Hour
+	}
+
+	queueName := config.String("queue", key)
+	routes := config.Strings("routes")
+	if len(routes) == 0 {
+		route := config.String("route", "")
+		if route != "" {
+			routes = []string{route}
+		}
+	}
+	retry, err := config.Retry()
+	if err != nil {
+		return queueOptions{}, err
+	}
+	errorSubject := config.String("error", r.cfg.GetString("nats.error"))
+	if errorSubject == "" {
+		errorSubject = "basic_error"
+	}
+	schedulePrefix := config.String("schedule_prefix", r.cfg.GetString("nats.schedule_prefix"))
+	if schedulePrefix == "" {
+		schedulePrefix = "_framework.queue.schedule"
+	}
+
+	return queueOptions{
+		topic:          config.String("topic", ""),
+		queue:          queueName,
+		routes:         routes,
+		delay:          delay,
+		ttl:            ttl,
+		delayed:        delay > 0 || config.Bool("delayed", false),
+		retry:          retry,
+		headers:        config.Headers(),
+		errorEnabled:   config.Bool("error_enable", true),
+		errorSubject:   errorSubject,
+		stream:         config.String("stream", r.cfg.GetString("nats.stream")),
+		schedulePrefix: schedulePrefix,
+		retention:      retention,
+	}, nil
+}
+
+type acknowledgeMessage interface {
+	Ack() error
+	Nak() error
+	Term() error
+}
+
+func acknowledge(message acknowledgeMessage, response any) error {
+	if response == nil {
+		return message.Ack()
+	}
+
+	action, ok := response.(Action)
+	if !ok {
+		if err := message.Nak(); err != nil {
+			return fmt.Errorf("nats: invalid consumer response %T: %w", response, err)
+		}
+		return fmt.Errorf("nats: invalid consumer response %T; message negatively acknowledged", response)
+	}
+
+	switch action {
+	case Ack:
+		return message.Ack()
+	case Nak:
+		return message.Nak()
+	case Term:
+		return message.Term()
+	default:
+		if err := message.Nak(); err != nil {
+			return fmt.Errorf("nats: invalid consumer action %d: %w", action, err)
+		}
+		return fmt.Errorf("nats: invalid consumer action %d; message negatively acknowledged", action)
+	}
 }
 
 func (r *NATS) signalDone() {

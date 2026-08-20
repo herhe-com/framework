@@ -20,20 +20,21 @@ const (
 // Handler processes a queue message body.
 type Handler = queue.Handler
 
+// Consumer prepares and handles messages for a configured queue key.
+type Consumer = queue.Consumer
+
 // Headers contains transport-neutral message headers.
 type Headers = queue.Headers
 
-// ProducerOptions describes where and how a message is published.
-type ProducerOptions = queue.ProducerOptions
-
-// ConsumerOptions describes a queue subscription.
-type ConsumerOptions = queue.ConsumerOptions
+// ErrDisabled indicates that a queue is disabled by configuration.
+var ErrDisabled = queue.ErrDisabled
 
 type Queue struct {
-	queue.Driver
 	mu      sync.RWMutex
 	drivers map[string]queue.Driver
 }
+
+var _ queue.Queue = (*Queue)(nil)
 
 func NewQueue() *Queue {
 	queue, err := NewQueueWithError()
@@ -47,18 +48,8 @@ func NewQueue() *Queue {
 
 // NewQueueWithError creates the queue application and returns initialization errors.
 func NewQueueWithError() (*Queue, error) {
-	defaultName := DefaultName()
-	driver, err := NewDriver(defaultName)
-	if err != nil {
-		return nil, err
-	}
-
-	drivers := make(map[string]queue.Driver)
-	drivers[defaultName] = driver
-
 	return &Queue{
-		drivers: drivers,
-		Driver:  driver,
+		drivers: make(map[string]queue.Driver),
 	}, nil
 }
 
@@ -79,9 +70,9 @@ func NewDriver(name string) (queue.Driver, error) {
 
 	switch driver {
 	case DriverRabbitmq:
-		return rabbitmq.NewRabbitMQ(cfg)
+		return rabbitmq.NewRabbitMQ(cfg, name)
 	case DriverNATS:
-		return natsqueue.NewNATS(cfg)
+		return natsqueue.NewNATS(cfg, name)
 	}
 
 	return nil, fmt.Errorf("invalid driver: %s, only support RabbitMQ and NATS", driver)
@@ -110,4 +101,55 @@ func (r *Queue) Channel(name string) (queue.Driver, error) {
 	r.drivers[name] = dri
 
 	return dri, nil
+}
+
+// Producer publishes a message using queue.queues.<key>.
+func (r *Queue) Producer(body []byte, key string, headers ...queue.Headers) error {
+	driver, err := r.driverForQueue(key)
+	if err != nil {
+		return err
+	}
+
+	return driver.Producer(body, key, headers...)
+}
+
+// Consumer consumes messages using queue.queues.<key>.
+func (r *Queue) Consumer(handler queue.Handler, key string) error {
+	driver, err := r.driverForQueue(key)
+	if err != nil {
+		return err
+	}
+
+	return driver.Consumer(handler, key)
+}
+
+func (r *Queue) driverForQueue(key string) (queue.Driver, error) {
+	definition, err := queueconfig.Load(key)
+	if err != nil {
+		return nil, err
+	}
+	if err = definition.EnsureEnabled(); err != nil {
+		return nil, err
+	}
+
+	return r.Channel(definition.Connection)
+}
+
+// Close closes every initialized queue connection.
+func (r *Queue) Close() error {
+	r.mu.RLock()
+	drivers := make([]queue.Driver, 0, len(r.drivers))
+	for _, driver := range r.drivers {
+		drivers = append(drivers, driver)
+	}
+	r.mu.RUnlock()
+
+	var firstErr error
+	for _, driver := range drivers {
+		if err := driver.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
 }

@@ -109,31 +109,19 @@ type Queue interface {
 	Channel(name string) (Driver, error)
 }
 
-type Handler func(data []byte) error
+type Handler func(data []byte) (response any, err error)
+
+type Consumer interface {
+	Key() string
+	Prepare() error
+	Handle(data []byte) (response any, err error)
+}
 
 type Headers map[string]any
 
-type ProducerOptions struct {
-	Topic   string
-	Queue   string
-	Routes  []string
-	Delay   time.Duration
-	TTL     time.Duration
-	Headers Headers
-}
-
-type ConsumerOptions struct {
-	Topic   string
-	Queue   string
-	Route   string
-	Delayed bool
-	TTL     time.Duration
-	Retry   int
-}
-
 type Driver interface {
-	Producer(body []byte, options ProducerOptions) error
-	Consumer(handler Handler, options ConsumerOptions) error
+	Producer(body []byte, key string, headers ...Headers) error
+	Consumer(handler Handler, key string) error
 	Close() error
 }
 ```

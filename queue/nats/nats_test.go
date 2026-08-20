@@ -1,16 +1,36 @@
 package nats
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	natsgo "github.com/nats-io/nats.go"
-	"github.com/spf13/viper"
 
 	contractqueue "github.com/herhe-com/framework/contracts/queue"
 )
+
+type fakeAcknowledgement struct {
+	action Action
+	err    error
+}
+
+func (f *fakeAcknowledgement) Ack() error {
+	f.action = Ack
+	return f.err
+}
+
+func (f *fakeAcknowledgement) Nak() error {
+	f.action = Nak
+	return f.err
+}
+
+func (f *fakeAcknowledgement) Term() error {
+	f.action = Term
+	return f.err
+}
 
 func TestPublishSubjects(t *testing.T) {
 	tests := []struct {
@@ -101,27 +121,47 @@ func TestHeadersFromNATS(t *testing.T) {
 	}
 }
 
-func TestScheduleConfiguration(t *testing.T) {
-	cfg := viper.New()
-	cfg.Set("nats", map[string]any{
-		"schedule_prefix": "custom.schedule",
-		"retention":       "2h",
-	})
-	driver := &NATS{cfg: cfg}
+func TestRequeueUsesTieredRetryDelay(t *testing.T) {
+	options := queueOptions{
+		retry: []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute},
+	}
 
-	if got := driver.scheduleSubject("EVENTS"); got != "custom.schedule.EVENTS" {
+	for _, tt := range []struct {
+		retried int
+		wait    time.Duration
+		ok      bool
+	}{
+		{0, time.Minute, true},
+		{1, 5 * time.Minute, true},
+		{2, 30 * time.Minute, true},
+		{3, 0, false},
+	} {
+		wait, ok := contractqueue.RetryAfter(options.retry, tt.retried)
+		if ok != tt.ok || wait != tt.wait {
+			t.Fatalf("retried=%d got (%s, %v), want (%s, %v)", tt.retried, wait, ok, tt.wait, tt.ok)
+		}
+	}
+}
+
+func TestScheduleConfiguration(t *testing.T) {
+	options := queueOptions{
+		schedulePrefix: "custom.schedule",
+		retention:      2 * time.Hour,
+	}
+
+	if got := options.scheduleSubject("EVENTS"); got != "custom.schedule.EVENTS" {
 		t.Fatalf("schedule subject = %q, want %q", got, "custom.schedule.EVENTS")
 	}
-	if got := driver.delayedMessageTTL(0); got != 2*time.Hour {
+	if got := options.delayedMessageTTL(0); got != 2*time.Hour {
 		t.Fatalf("default delayed message TTL = %s, want %s", got, 2*time.Hour)
 	}
-	if got := driver.delayedMessageTTL(30 * time.Minute); got != 30*time.Minute {
+	if got := options.delayedMessageTTL(30 * time.Minute); got != 30*time.Minute {
 		t.Fatalf("explicit delayed message TTL = %s, want %s", got, 30*time.Minute)
 	}
-	if got := driver.streamMaxAge(30 * time.Minute); got != 2*time.Hour {
+	if got := options.streamMaxAge(30 * time.Minute); got != 2*time.Hour {
 		t.Fatalf("stream max age = %s, want %s", got, 2*time.Hour)
 	}
-	if got := driver.streamMaxAge(3 * time.Hour); got != 3*time.Hour {
+	if got := options.streamMaxAge(3 * time.Hour); got != 3*time.Hour {
 		t.Fatalf("stream max age = %s, want %s", got, 3*time.Hour)
 	}
 }
@@ -165,5 +205,40 @@ func TestConsumerName(t *testing.T) {
 	}
 	if strings.ContainsAny(name, ".*>/\\ ") {
 		t.Fatalf("consumer name contains invalid characters: %q", name)
+	}
+}
+
+func TestAcknowledge(t *testing.T) {
+	tests := []struct {
+		name     string
+		response any
+		want     Action
+		wantErr  bool
+	}{
+		{name: "default", want: Ack},
+		{name: "ack", response: Ack, want: Ack},
+		{name: "nak", response: Nak, want: Nak},
+		{name: "term", response: Term, want: Term},
+		{name: "invalid type", response: "ack", want: Nak, wantErr: true},
+		{name: "invalid action", response: Action(99), want: Nak, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			message := &fakeAcknowledgement{}
+			err := acknowledge(message, tt.response)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("acknowledge() error = %v, wantErr %t", err, tt.wantErr)
+			}
+			if message.action != tt.want {
+				t.Fatalf("acknowledge() action = %v, want %v", message.action, tt.want)
+			}
+		})
+	}
+
+	wantErr := errors.New("ack failed")
+	message := &fakeAcknowledgement{err: wantErr}
+	if err := acknowledge(message, nil); !errors.Is(err, wantErr) {
+		t.Fatalf("acknowledge() error = %v, want %v", err, wantErr)
 	}
 }

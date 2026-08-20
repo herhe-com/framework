@@ -46,3 +46,51 @@ func TestRetryDelay(t *testing.T) {
 		}
 	}
 }
+
+func TestMergeHeaders(t *testing.T) {
+	got := MergeHeaders(
+		Headers{"source": "config", "keep": true},
+		Headers{"source": "runtime"},
+	)
+	want := Headers{"source": "runtime", "keep": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("MergeHeaders() = %#v, want %#v", got, want)
+	}
+}
+
+func TestRetryAfter(t *testing.T) {
+	retry := []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute}
+
+	for _, tt := range []struct {
+		retried int
+		wait    time.Duration
+		ok      bool
+	}{
+		{retried: 0, wait: time.Minute, ok: true},
+		{retried: 1, wait: 5 * time.Minute, ok: true},
+		{retried: 2, wait: 30 * time.Minute, ok: true},
+		{retried: 3, ok: false},
+		{retried: -1, ok: false},
+	} {
+		wait, ok := RetryAfter(retry, tt.retried)
+		if ok != tt.ok || wait != tt.wait {
+			t.Fatalf("RetryAfter(%d) = (%s, %v), want (%s, %v)", tt.retried, wait, ok, tt.wait, tt.ok)
+		}
+	}
+
+	if _, ok := RetryAfter(nil, 0); ok {
+		t.Fatal("RetryAfter(nil) ok = true, want false")
+	}
+}
+
+func TestHasPositiveRetryDelay(t *testing.T) {
+	if HasPositiveRetryDelay(nil) {
+		t.Fatal("HasPositiveRetryDelay(nil) = true")
+	}
+	if HasPositiveRetryDelay([]time.Duration{0, 0}) {
+		t.Fatal("HasPositiveRetryDelay(zeros) = true")
+	}
+	if !HasPositiveRetryDelay([]time.Duration{0, time.Second}) {
+		t.Fatal("HasPositiveRetryDelay(mixed) = false")
+	}
+}
