@@ -1,6 +1,7 @@
 package crontab
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gookit/color"
@@ -26,23 +27,46 @@ func (app *Application) register() {
 	app.Register(app.configured())
 }
 
-func (app *Application) Register(crontab []crontab.Crontab) {
+func (app *Application) Register(tasks []crontab.Crontab) {
 
-	for _, item := range crontab {
+	for _, task := range tasks {
+		key := strings.TrimSpace(task.Key())
+		name := strings.TrimSpace(task.Name())
+		if name == "" {
+			name = key
+		}
+		if key == "" {
+			color.Errorf("\n定时任务「%s」配置键不能为空\n", name)
+			continue
+		}
 
-		_, err := app.client.AddFunc(item.Rule(), item.Func)
+		configKey := "crontab.tasks." + key
+		if !facades.Config().GetBool(configKey+".enable", true) {
+			continue
+		}
+		rule := strings.TrimSpace(facades.Config().GetString(configKey + ".rule"))
+		if rule == "" {
+			color.Errorf("\n定时任务「%s」未配置运行频率：%s.rule\n", name, configKey)
+			continue
+		}
+
+		_, err := app.client.AddFunc(rule, task.Func)
 
 		if err != nil {
-			color.Errorf("\n定时任务「%s」运行失败：%v\n", item.Name(), err)
+			color.Errorf("\n定时任务「%s」注册失败：%v\n", name, err)
 		} else {
-			color.Successf("\n定时任务「%s」运行成功\n", item.Name())
+			color.Successf("\n定时任务「%s」注册成功\n", name)
 		}
 	}
 }
 
 func (app *Application) Init() {
 
-	app.client = cron.New(cron.WithLocation(time.Local))
+	app.client = cron.New(
+		cron.WithLocation(time.Local),
+		// 上一轮未退出时跳过本轮，避免每分钟再叠一批循环。
+		cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)),
+	)
 
 	app.register()
 }

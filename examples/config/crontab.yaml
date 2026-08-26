@@ -2,5 +2,10 @@
 
 crontab:
   functions: []
+  tasks:
+    example:
+      enable: true
+      rule: "0 2 * * *"
 
 # 实际任务函数需要通过 Go 代码注入，因为任务条目里包含函数指针。
+# 调度器按任务的 Key() 读取 tasks.<key>.enable 和 tasks.<key>.rule。
