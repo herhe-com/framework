@@ -29,7 +29,7 @@ type Captcha struct {
 // VerifyData contains the form data used to verify a captcha.
 // Click uses Dots, slide uses X, and rotate uses Angle.
 type VerifyData struct {
-	Key   string `json:"key" form:"key" validate:"required" label:"验证码标识"`
+	Key   string `json:"key" form:"key" validate:"omitempty" label:"验证码标识"`
 	Dots  []Dot  `json:"dots" form:"dots" validate:"omitempty,min=1,dive" label:"点击坐标"`
 	X     int    `json:"x" form:"x" validate:"min=0" label:"滑块横坐标"`
 	Angle int    `json:"angle" form:"angle" validate:"min=0" label:"旋转角度"`

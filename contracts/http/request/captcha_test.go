@@ -51,8 +51,8 @@ func TestCaptchaValidation(t *testing.T) {
 	if err := validate.Struct(Captcha{Key: "captcha-key"}); err != nil {
 		t.Fatalf("validate captcha: %v", err)
 	}
-	if err := validate.Struct(Captcha{}); err == nil {
-		t.Fatal("expected missing captcha key error")
+	if err := validate.Struct(Captcha{}); err != nil {
+		t.Fatalf("validate empty captcha: %v", err)
 	}
 	if err := validate.Struct(Captcha{Key: "captcha-key", X: -1}); err == nil {
 		t.Fatal("expected invalid captcha position error")
