@@ -19,11 +19,18 @@ type Driver interface {
 	Verify(data VerifyData, target json.RawMessage) error
 }
 
-// Challenge contains the public images and private verification target produced by a driver.
+// Challenge contains the public images, private verification target, and optional
+// display coordinates produced by a driver.
+//
+// Y is the vertical display coordinate of the target. It is populated for the
+// slide driver so the client can align the slider to the gap, and left zero for
+// click and rotate drivers. It must not contain X (the horizontal answer), which
+// stays inside Target.
 type Challenge struct {
 	Master string
 	Thumb  string
 	Target json.RawMessage
+	Y      int
 }
 
 // Verify validates the user input through the captcha application.

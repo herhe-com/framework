@@ -59,7 +59,8 @@ func (r *Slide) Generate() (*contractcaptcha.Challenge, error) {
 	if err != nil {
 		return nil, err
 	}
-	if data.GetData() == nil {
+	block := data.GetData()
+	if block == nil {
 		return nil, contractcaptcha.ErrCaptchaGenerate
 	}
 
@@ -71,12 +72,12 @@ func (r *Slide) Generate() (*contractcaptcha.Challenge, error) {
 	if err != nil {
 		return nil, err
 	}
-	target, err := json.Marshal(data.GetData())
+	target, err := json.Marshal(block)
 	if err != nil {
 		return nil, err
 	}
 
-	return &contractcaptcha.Challenge{Master: master, Thumb: thumb, Target: target}, nil
+	return &contractcaptcha.Challenge{Master: master, Thumb: thumb, Target: target, Y: block.DY}, nil
 }
 
 // Verify validates the slide position against a generated target.
@@ -85,9 +86,32 @@ func (r *Slide) Verify(data contractcaptcha.VerifyData, target json.RawMessage) 
 	if err := json.Unmarshal(target, &expected); err != nil {
 		return err
 	}
-	if expected == nil || !goslide.Validate(data.X, expected.Y, expected.X, expected.Y, r.padding) {
+	if expected == nil {
+		return errors.New("验证码错误")
+	}
+
+	x, y, ok := slideInput(data)
+	if !ok || !within(x, expected.X, r.padding) || (y != nil && !within(*y, expected.Y, r.padding)) {
 		return errors.New("验证码错误")
 	}
 
 	return nil
+}
+
+// slideInput extracts the slide coordinates from the user input. Dots is the
+// canonical input and carries both coordinates. The top-level X is a
+// deprecated fallback that carries no Y (returned as nil) and cannot verify a
+// zero coordinate; it will be removed together with VerifyData.X.
+func slideInput(data contractcaptcha.VerifyData) (x int, y *int, ok bool) {
+	if len(data.Dots) > 0 {
+		return data.Dots[0].X, &data.Dots[0].Y, true
+	}
+	if data.X != 0 {
+		return data.X, nil, true
+	}
+	return 0, nil, false
+}
+
+func within(got, want, padding int) bool {
+	return got >= want-padding && got <= want+padding
 }

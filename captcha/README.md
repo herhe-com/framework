@@ -94,6 +94,7 @@ func GenerateCaptcha(ctx context.Context) error {
     // result.Driver：click、slide 或 rotate
     // result.Master：主图 Base64
     // result.Thumb：提示图、滑块图或旋转缩略图 Base64
+    // result.Y：仅 slide 模式返回，表示缺口在主图上的纵向坐标，用于前端对齐滑块；其他模式为 0
     _ = result
 
     return nil
@@ -108,6 +109,18 @@ func GenerateCaptcha(ctx context.Context) error {
   "driver": "click",
   "master": "...",
   "thumb": "..."
+}
+```
+
+slide 模式还会额外返回缺口所在位置的纵向坐标 `y`，前端需要用它把滑块拼图垂直对齐到主图缺口上（横向 `x` 是验证答案，不会返回）：
+
+```json
+{
+  "key": "df62452fc5574fa59c465a6b80ec80e2",
+  "driver": "slide",
+  "master": "...",
+  "thumb": "...",
+  "y": 96
 }
 ```
 
@@ -162,8 +175,22 @@ func VerifyRotate(ctx context.Context, key string, angle int) error {
 | 驱动 | 验证字段 | 说明 |
 | --- | --- | --- |
 | `click` | `dots` | 点击点数组，每个点包含 `index`、`x`、`y` |
-| `slide` | `x` | 滑块最终横坐标 |
+| `slide` | `dots[0].x/y` | 滑块最终坐标；顶层 `x` 已废弃，仅保留一个版本周期且无法校验 `x=0` |
 | `rotate` | `angle` | 用户旋转后的角度 |
+
+## 安全说明：暴露与隐藏
+
+返回给客户端的响应只包含渲染必需的信息，**绝不包含校验答案**：
+
+| 驱动 | 返回给客户端 | 隐藏（仅存 Redis `target` / 驱动内存） |
+| --- | --- | --- |
+| `click` | `master`、`thumb` | 点击点坐标 `dots`、索引、文字 |
+| `slide` | `master`、`thumb`、`y`（缺口纵向坐标） | 横向答案 `x` |
+| `rotate` | `master`、`thumb` | 旋转角度 `angle` |
+
+- 校验答案通过 `key` 关联存入 Redis，客户端只提交 `key` 与用户操作结果，服务端比对后删除记录。
+- legacy 的 `captcha.Click` / `captcha.Slide` / `captcha.Rotate` 结构内携带完整答案字段（`Dots` / `Block`），已通过 `json:"-"` 隐藏，不应直接序列化返回给客户端，仅供服务端复用与校验。
+- 前端需要的展示坐标（如滑块缺口纵向位置 `y`）会显式返回，但横向/点击答案永远不会包含在响应中。
 
 ## 直接调用单一服务商
 
@@ -178,7 +205,7 @@ if err != nil {
 challenge, err := driver.Generate()
 ```
 
-驱动层只负责生成和校验，不会生成 `key`，也不会读写 Redis。`challenge.Target` 是内部正确答案，不能返回给前端。原有 `Click`、`Slide`、`Rotate` 及对应校验函数作为兼容入口继续保留。
+驱动层只负责生成和校验，不会生成 `key`，也不会读写 Redis。`challenge.Target` 是内部正确答案，不能返回给前端；slide 驱动会在 `challenge.Y` 上暴露缺口纵向展示坐标，供前端对齐滑块使用。原有 `Click`、`Slide`、`Rotate` 及对应校验函数作为兼容入口继续保留。
 
 ## Redis 要求
 
@@ -188,7 +215,7 @@ challenge, err := driver.Generate()
 {app.name}:captcha:{key}
 ```
 
-`captcha.expire` 是推荐的有效期配置；为兼容旧配置，未设置时也会读取 `captcha.expiration`，最终默认值为 `300` 秒。
+`captcha.expire` 是 Redis 有效期，单位秒，未设置时默认 `300`，必须大于 `0`。
 
 ## 错误处理
 

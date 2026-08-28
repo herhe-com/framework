@@ -150,6 +150,7 @@ func (r *Captcha) Generate(ctx context.Context) (*contractcaptcha.Captcha, error
 		Driver: driverName,
 		Master: challenge.Master,
 		Thumb:  challenge.Thumb,
+		Y:      challenge.Y,
 	}
 	payload, err := json.Marshal(storedCaptcha{Driver: driverName, Target: challenge.Target})
 	if err != nil {

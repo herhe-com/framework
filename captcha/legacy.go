@@ -78,7 +78,7 @@ func SlideVerify(x int, target *goslide.Block) error {
 		return err
 	}
 
-	return driver.Verify(contractcaptcha.VerifyData{X: x}, payload)
+	return driver.Verify(contractcaptcha.VerifyData{Dots: []contractcaptcha.Dot{{X: x}}}, payload)
 }
 
 // Rotate generates a rotate captcha without storing it in Redis.
