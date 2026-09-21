@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gookit/color"
@@ -22,18 +23,23 @@ import (
 // consumer retry requeues. Business exchanges stay unchanged.
 const DelayExchange = "_framework.queue.delay"
 
+// ErrClosed is returned when publishing or consuming on a closed driver.
+var ErrClosed = errors.New("rabbitmq: driver is closed")
+
 type RabbitMQ struct {
-	conn        *rabbitmq.Conn
-	cfg         *viper.Viper
-	name        string
-	host        string
-	port        int
-	username    string
-	password    string
-	vhost       string
-	consumersMu sync.Mutex
-	consumers   []*rabbitmq.Consumer
-	closed      bool
+	conn         *rabbitmq.Conn
+	cfg          *viper.Viper
+	name         string
+	host         string
+	port         int
+	username     string
+	password     string
+	vhost        string
+	consumersMu  sync.Mutex
+	consumers    []*rabbitmq.Consumer
+	publishersMu sync.Mutex
+	publishers   map[publisherKey]*rabbitmq.Publisher
+	closed       atomic.Bool
 }
 
 type queueOptions struct {
@@ -70,13 +76,14 @@ func NewRabbitMQ(configs map[string]any, names ...string) (queue *RabbitMQ, err 
 	vhost = strings.TrimLeft(vhost, "/")
 
 	r := &RabbitMQ{
-		cfg:      cfg,
-		name:     name,
-		host:     host,
-		port:     port,
-		username: username,
-		password: password,
-		vhost:    vhost,
+		cfg:        cfg,
+		name:       name,
+		host:       host,
+		port:       port,
+		username:   username,
+		password:   password,
+		vhost:      vhost,
+		publishers: make(map[publisherKey]*rabbitmq.Publisher),
 	}
 
 	var conn *rabbitmq.Conn
@@ -117,32 +124,17 @@ func (r *RabbitMQ) publish(
 	options queueOptions,
 	routes []string,
 	headers contractqueue.Headers,
-) (err error) {
-	if err = r.CheckQueue(options.queue); err != nil {
+) error {
+	if err := r.CheckQueue(options.queue); err != nil {
 		return err
 	}
 
-	var publisher *rabbitmq.Publisher
-
-	publisherOptions := r.PublisherOptions(options)
-
-	if options.delayed {
-		publisherOptions = append([]func(publisherOptions *rabbitmq.PublisherOptions){
-			rabbitmq.WithPublisherOptionsExchangeKind("x-delayed-message"),
-			rabbitmq.WithPublisherOptionsExchangeDurable,
-		}, publisherOptions...)
-	} else if options.ttl > 0 {
-		publisherOptions = append([]func(publisherOptions *rabbitmq.PublisherOptions){
-			rabbitmq.WithPublisherOptionsExchangeDurable,
-		}, publisherOptions...)
-	}
-
-	publisherOptions = append([]func(publisherOptions *rabbitmq.PublisherOptions){
-		rabbitmq.WithPublisherOptionsExchangeName(options.topic),
-		rabbitmq.WithPublisherOptionsExchangeDeclare,
-	}, publisherOptions...)
-
-	if publisher, err = rabbitmq.NewPublisher(r.conn, publisherOptions...); err != nil {
+	// Construction options are built lazily: they only matter on a cache
+	// miss, when the Publisher is actually created.
+	publisher, err := r.publisher(options.publisherKey(), func() []func(*rabbitmq.PublisherOptions) {
+		return r.publisherOptions(options)
+	})
+	if err != nil {
 		return err
 	}
 
@@ -168,6 +160,36 @@ func (r *RabbitMQ) publish(
 	return publisher.Publish(data, routes, opts...)
 }
 
+// publisherOptions assembles the construction options of a queue Publisher.
+// The final slice follows go-rabbitmq's "last option wins" semantics:
+//
+//  1. ExchangeName and ExchangeDeclare — framework defaults, set first.
+//  2. ExchangeKind / ExchangeDurable   — implied by delayed or ttl, prepended
+//     before user options so they can be overridden.
+//  3. User-supplied publisher_options  — appended last and therefore take
+//     precedence over all framework defaults above.
+//
+// This function runs on cache misses only; cache hits skip it entirely.
+func (r *RabbitMQ) publisherOptions(options queueOptions) []func(*rabbitmq.PublisherOptions) {
+	opts := r.PublisherOptions(options)
+
+	if options.delayed {
+		opts = append([]func(*rabbitmq.PublisherOptions){
+			rabbitmq.WithPublisherOptionsExchangeKind("x-delayed-message"),
+			rabbitmq.WithPublisherOptionsExchangeDurable,
+		}, opts...)
+	} else if options.ttl > 0 {
+		opts = append([]func(*rabbitmq.PublisherOptions){
+			rabbitmq.WithPublisherOptionsExchangeDurable,
+		}, opts...)
+	}
+
+	return append([]func(*rabbitmq.PublisherOptions){
+		rabbitmq.WithPublisherOptionsExchangeName(options.topic),
+		rabbitmq.WithPublisherOptionsExchangeDeclare,
+	}, opts...)
+}
+
 // publishRetry requeues a failed message. Positive waits go through the shared
 // delay exchange so business exchanges stay on their original type.
 func (r *RabbitMQ) publishRetry(
@@ -185,15 +207,7 @@ func (r *RabbitMQ) publishRetry(
 		return err
 	}
 
-	publisher, err := rabbitmq.NewPublisher(r.conn,
-		rabbitmq.WithPublisherOptionsExchangeName(DelayExchange),
-		rabbitmq.WithPublisherOptionsExchangeKind("x-delayed-message"),
-		rabbitmq.WithPublisherOptionsExchangeDurable,
-		rabbitmq.WithPublisherOptionsExchangeDeclare,
-		rabbitmq.WithPublisherOptionsExchangeArgs(rabbitmq.Table{
-			"x-delayed-type": "direct",
-		}),
-	)
+	publisher, err := r.publisher(retryPublisherKey, retryPublisherOptions)
 	if err != nil {
 		return err
 	}
@@ -210,6 +224,87 @@ func (r *RabbitMQ) publishRetry(
 		rabbitmq.WithPublishOptionsExchange(DelayExchange),
 		rabbitmq.WithPublishOptionsHeaders(header),
 	)
+}
+
+// publisher returns the cached Publisher for key, creating it on first use.
+// Each Publisher owns one AMQP channel on the shared connection, so reusing
+// them keeps the channel count bounded by configuration instead of leaking
+// one channel per published message. Publishers survive reconnects because
+// go-rabbitmq redeclares their exchange on the fresh connection.
+//
+// options is evaluated only when the Publisher is actually created, so cache
+// hits cost nothing beyond a map lookup.
+func (r *RabbitMQ) publisher(key publisherKey, options func() []func(*rabbitmq.PublisherOptions)) (*rabbitmq.Publisher, error) {
+	r.publishersMu.Lock()
+	defer r.publishersMu.Unlock()
+
+	if r.closed.Load() {
+		return nil, ErrClosed
+	}
+	if r.conn == nil {
+		return nil, errors.New("rabbitmq: connection is not initialized")
+	}
+
+	if publisher, ok := r.publishers[key]; ok {
+		return publisher, nil
+	}
+
+	publisher, err := rabbitmq.NewPublisher(r.conn, options()...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Defensive guard: Close() stores closed=true before acquiring publishersMu,
+	// so if closed.Load() returned false above, publishers cannot be nil yet.
+	// This explicit check preserves that invariant against future refactors that
+	// might release the lock before NewPublisher returns.
+	if r.publishers == nil {
+		publisher.Close()
+		return nil, ErrClosed
+	}
+
+	r.publishers[key] = publisher
+
+	return publisher, nil
+}
+
+// publisherKey identifies the long-lived Publisher of a queue definition.
+// The dimensions cover everything that changes Publisher construction: the
+// per-queue publisher_options (via the config key), the exchange name, and
+// the exchange kind/durable flags derived from delayed and ttl.
+type publisherKey struct {
+	config  string
+	topic   string
+	delayed bool
+	ttl     bool
+}
+
+// publisherKey returns the cache key of the queue's Publisher.
+func (o queueOptions) publisherKey() publisherKey {
+	return publisherKey{
+		config:  o.config.Key,
+		topic:   o.topic,
+		delayed: o.delayed,
+		ttl:     o.ttl > 0,
+	}
+}
+
+// retryPublisherKey identifies the shared Publisher of the delay exchange used
+// for consumer retries. Queue publishers carry a non-empty config key and the
+// error-queue publisher is never delayed, so neither can collide with it.
+var retryPublisherKey = publisherKey{topic: DelayExchange, delayed: true}
+
+// retryPublisherOptions declares the shared delay exchange used for retries.
+func retryPublisherOptions() []func(*rabbitmq.PublisherOptions) {
+	return []func(*rabbitmq.PublisherOptions){
+		rabbitmq.WithPublisherOptionsExchangeName(DelayExchange),
+		rabbitmq.WithPublisherOptionsExchangeKind("x-delayed-message"),
+		rabbitmq.WithPublisherOptionsExchangeDurable,
+		rabbitmq.WithPublisherOptionsExchangeDeclare,
+		rabbitmq.WithPublisherOptionsExchangeArgs(rabbitmq.Table{
+			"x-delayed-type": "direct",
+		}),
+	}
 }
 
 func (r *RabbitMQ) Consumer(handler contractqueue.Handler, key string) (err error) {
@@ -283,7 +378,7 @@ func (r *RabbitMQ) Consumer(handler contractqueue.Handler, key string) (err erro
 	}
 	if !r.trackConsumer(consumer) {
 		consumer.Close()
-		return errors.New("rabbitmq: driver is closed")
+		return ErrClosed
 	}
 
 	// Run blocks until consumer.Close() unblocks reconnectErrCh.
@@ -344,7 +439,7 @@ func (r *RabbitMQ) trackConsumer(consumer *rabbitmq.Consumer) bool {
 	r.consumersMu.Lock()
 	defer r.consumersMu.Unlock()
 
-	if r.closed {
+	if r.closed.Load() {
 		return false
 	}
 
@@ -442,8 +537,9 @@ func consumerAction(response any) rabbitmq.Action {
 }
 
 func (r *RabbitMQ) Close() error {
+	r.closed.Store(true)
+
 	r.consumersMu.Lock()
-	r.closed = true
 	consumers := r.consumers
 	r.consumers = nil
 	r.consumersMu.Unlock()
@@ -453,6 +549,17 @@ func (r *RabbitMQ) Close() error {
 	// Run blocked on reconnectErrCh forever.
 	for _, consumer := range consumers {
 		consumer.Close()
+	}
+
+	r.publishersMu.Lock()
+	publishers := r.publishers
+	r.publishers = nil
+	r.publishersMu.Unlock()
+
+	// Close cached publishers before the connection so their AMQP channels
+	// are released and their reconnect loops stop.
+	for _, publisher := range publishers {
+		publisher.Close()
 	}
 
 	if r.conn == nil {
