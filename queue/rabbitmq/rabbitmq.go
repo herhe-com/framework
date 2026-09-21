@@ -378,6 +378,15 @@ func (r *RabbitMQ) queueOptions(key string) (queueOptions, error) {
 		return queueOptions{}, err
 	}
 
+	// 'delayed' and 'ttl' use incompatible exchange configurations: delayed
+	// queues require x-delayed-message, while TTL queues declare a plain
+	// durable exchange with x-message-ttl queue args. Enabling both at once
+	// leads to undefined behaviour at the broker level.
+	delayed := delay > 0 || config.Bool("delayed", false)
+	if delayed && ttl > 0 {
+		return queueOptions{}, fmt.Errorf("queue %s: 'delayed' and 'ttl' are mutually exclusive", key)
+	}
+
 	queueName := config.String("queue", key)
 	routes := config.Strings("routes")
 	if len(routes) == 0 {
@@ -403,7 +412,7 @@ func (r *RabbitMQ) queueOptions(key string) (queueOptions, error) {
 		routes:       routes,
 		delay:        delay,
 		ttl:          ttl,
-		delayed:      delay > 0 || config.Bool("delayed", false),
+		delayed:      delayed,
 		retry:        retry,
 		concurrency:  concurrency,
 		headers:      config.Headers(),
