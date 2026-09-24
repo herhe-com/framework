@@ -1,25 +1,23 @@
 package util
 
 import (
-	"fmt"
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"strings"
-	"time"
 )
 
 func Captcha(length int8) string {
 
-	numeric := [10]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-
-	l := len(numeric)
-
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	var i int8
+	if length <= 0 {
+		return ""
+	}
 	var sb strings.Builder
-
-	for i = 0; i < length; i++ {
-		_, _ = fmt.Fprintf(&sb, "%d", numeric[r.Intn(l)])
+	for i := int8(0); i < length; i++ {
+		digit, err := rand.Int(rand.Reader, big.NewInt(10))
+		if err != nil {
+			return ""
+		}
+		sb.WriteByte(byte('0' + digit.Int64()))
 	}
 
 	return sb.String()
