@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"errors"
 	"image"
 	"math/rand"
 	"os"
@@ -56,6 +57,9 @@ func Backgrounds(root, dir string) ([]image.Image, error) {
 		if err == nil && img != nil {
 			images = append(images, img)
 		}
+	}
+	if len(images) == 0 {
+		return nil, errors.New("captcha background directory contains no decodable images")
 	}
 
 	return images, nil

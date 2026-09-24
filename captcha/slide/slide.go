@@ -104,6 +104,9 @@ func (r *Slide) Verify(data contractcaptcha.VerifyData, target json.RawMessage) 
 // zero coordinate; it will be removed together with VerifyData.X.
 func slideInput(data contractcaptcha.VerifyData) (x int, y *int, ok bool) {
 	if len(data.Dots) > 0 {
+		if len(data.Dots) != 1 {
+			return 0, nil, false
+		}
 		return data.Dots[0].X, &data.Dots[0].Y, true
 	}
 	if data.X != 0 {
