@@ -29,7 +29,6 @@ require (
 	github.com/gookit/color v1.6.1
 	github.com/h2non/filetype v1.1.3
 	github.com/hertz-contrib/cors v0.1.0
-	github.com/hertz-contrib/swagger v0.1.1
 	github.com/minio/minio-go/v7 v7.3.0
 	github.com/nats-io/nats.go v1.53.1
 	github.com/pressly/goose/v3 v3.27.3
@@ -41,7 +40,7 @@ require (
 	github.com/spf13/cast v1.10.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	github.com/swaggo/files v1.0.1
+	github.com/swaggo/http-swagger v1.3.4
 	github.com/wagslane/go-rabbitmq v0.16.1
 	github.com/wenlng/go-captcha-assets v1.0.7
 	github.com/wenlng/go-captcha/v2 v2.0.5
@@ -158,6 +157,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
+	github.com/swaggo/files v1.0.1 // indirect
 	github.com/swaggo/swag v1.16.6 // indirect
 	github.com/tidwall/gjson v1.19.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect

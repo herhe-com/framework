@@ -5,14 +5,14 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	adaptor "github.com/cloudwego/hertz/pkg/common/adaptor"
 	"github.com/cloudwego/hertz/pkg/common/config"
 	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/go-playground/validator/v10"
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/herhe-com/framework/facades"
-	"github.com/hertz-contrib/swagger"
 	"github.com/spf13/cobra"
-	files "github.com/swaggo/files"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 type ServerProvider struct {
@@ -61,7 +61,11 @@ func (*ServerProvider) Register() console.Console {
 			}
 
 			if facades.Config().GetBool("app.debug") {
-				serv.GET("/swagger/*any", swagger.WrapHandler(files.Handler, swagger.DefaultModelsExpandDepth(-1)))
+				serv.GET("/swagger/*any", adaptor.HertzHandler(httpSwagger.Handler(
+					httpSwagger.UIConfig(map[string]string{
+						"defaultModelsExpandDepth": "-1",
+					}),
+				)))
 			}
 
 			serv.Spin()
