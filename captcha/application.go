@@ -2,6 +2,7 @@ package captcha
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gookit/color"
+	goredis "github.com/redis/go-redis/v9"
 
 	clickcaptcha "github.com/herhe-com/framework/captcha/click"
 	rotatecaptcha "github.com/herhe-com/framework/captcha/rotate"
@@ -21,16 +23,18 @@ import (
 )
 
 const (
-	DriverAuto   = "auto"
-	DriverClick  = "click"
-	DriverSlide  = "slide"
-	DriverRotate = "rotate"
+	DriverGoCaptcha = "go-captcha"
+	TypeAuto        = "auto"
+	TypeClick       = "click"
+	TypeSlide       = "slide"
+	TypeRotate      = "rotate"
 )
 
-var concreteDrivers = []string{DriverClick, DriverSlide, DriverRotate}
+var concreteTypes = []string{TypeClick, TypeSlide, TypeRotate}
 
 type storedCaptcha struct {
 	Driver string          `json:"driver"`
+	Type   string          `json:"type"`
 	Target json.RawMessage `json:"target"`
 }
 
@@ -55,53 +59,37 @@ func NewCaptcha() *Captcha {
 
 // NewCaptchaWithError creates the captcha application and returns initialization errors.
 func NewCaptchaWithError() (*Captcha, error) {
-	application := newCaptcha()
-	if !facades.Config().GetBool("captcha.enable", true) {
-		return application, nil
-	}
-
-	driver := DefaultDriver()
-	if driver == DriverAuto {
-		return application, nil
-	}
-
-	instance, err := NewDriver(driver)
-	if err != nil {
-		return nil, err
-	}
-	application.drivers[driver] = instance
-
-	return application, nil
+	return newCaptcha(), nil
 }
 
-// DefaultDriver returns the configured default captcha driver.
-func DefaultDriver() string {
-	return strings.ToLower(facades.Config().GetString("captcha.driver", DriverClick))
+// DefaultDriver returns the configured captcha engine for a scene.
+func DefaultDriver(scene string) string {
+	return strings.ToLower(facades.Config().GetString("captcha.scenes."+scene+".driver", DriverGoCaptcha))
 }
 
-// NewDriver creates a captcha driver from the captcha configuration.
-func NewDriver(driver string) (contractcaptcha.Driver, error) {
-	driver = strings.ToLower(driver)
+// NewDriver creates a captcha type using the configured captcha engine.
+func NewDriver(captchaType string) (contractcaptcha.Driver, error) {
+	captchaType = strings.ToLower(captchaType)
 	configs, _ := facades.Config().Get("captcha").(map[string]any)
 
-	switch driver {
-	case DriverClick:
+	switch captchaType {
+	case TypeClick:
 		return clickcaptcha.NewClick(facades.Root(), configs), nil
-	case DriverSlide:
+	case TypeSlide:
 		return slidecaptcha.NewSlide(facades.Root(), configs), nil
-	case DriverRotate:
+	case TypeRotate:
 		return rotatecaptcha.NewRotate(facades.Root(), configs), nil
 	default:
-		return nil, fmt.Errorf("invalid captcha driver: %s, only support click, slide, rotate", driver)
+		return nil, fmt.Errorf("invalid captcha type: %s, only support click, slide, rotate", captchaType)
 	}
 }
 
 // Driver returns a cached captcha driver.
-func (r *Captcha) Driver(driver string) (contractcaptcha.Driver, error) {
-	driver = strings.ToLower(driver)
+func (r *Captcha) Driver(captchaType string) (contractcaptcha.Driver, error) {
+	captchaType = strings.ToLower(captchaType)
 
 	r.mu.RLock()
-	if instance, ok := r.drivers[driver]; ok {
+	if instance, ok := r.drivers[captchaType]; ok {
 		r.mu.RUnlock()
 		return instance, nil
 	}
@@ -109,31 +97,43 @@ func (r *Captcha) Driver(driver string) (contractcaptcha.Driver, error) {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if instance, ok := r.drivers[driver]; ok {
+	if instance, ok := r.drivers[captchaType]; ok {
 		return instance, nil
 	}
 
-	instance, err := NewDriver(driver)
+	instance, err := NewDriver(captchaType)
 	if err != nil {
 		return nil, err
 	}
-	r.drivers[driver] = instance
+	r.drivers[captchaType] = instance
 
 	return instance, nil
 }
 
 // Generate creates the configured captcha and stores its verification target in Redis.
-func (r *Captcha) Generate(ctx context.Context) (*contractcaptcha.Captcha, error) {
-	if !facades.Config().GetBool("captcha.enable", true) {
+func (r *Captcha) Generate(ctx context.Context, scene string) (*contractcaptcha.Captcha, error) {
+	scene = strings.TrimSpace(scene)
+	if scene == "" {
+		return nil, errors.New("验证码场景不能为空")
+	}
+	enabled, err := captchaSceneEnabled(scene)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
 		return nil, nil
 	}
-
-	driverName := DefaultDriver()
-	if driverName == DriverAuto {
-		driverName = concreteDrivers[rand.Intn(len(concreteDrivers))]
+	driverName := DefaultDriver(scene)
+	if driverName != DriverGoCaptcha {
+		return nil, fmt.Errorf("invalid captcha driver: %s, only support %s", driverName, DriverGoCaptcha)
 	}
 
-	driver, err := r.Driver(driverName)
+	captchaType := strings.ToLower(facades.Config().GetString("captcha.scenes."+scene+".type", TypeClick))
+	if captchaType == TypeAuto {
+		captchaType = concreteTypes[rand.Intn(len(concreteTypes))]
+	}
+
+	driver, err := r.Driver(captchaType)
 	if err != nil {
 		return nil, err
 	}
@@ -148,11 +148,12 @@ func (r *Captcha) Generate(ctx context.Context) (*contractcaptcha.Captcha, error
 	result := &contractcaptcha.Captcha{
 		Key:    facades.Snowflake().Generate().String(),
 		Driver: driverName,
+		Type:   captchaType,
 		Master: challenge.Master,
 		Thumb:  challenge.Thumb,
 		Y:      challenge.Y,
 	}
-	payload, err := json.Marshal(storedCaptcha{Driver: driverName, Target: challenge.Target})
+	payload, err := json.Marshal(storedCaptcha{Driver: driverName, Type: captchaType, Target: challenge.Target})
 	if err != nil {
 		return nil, err
 	}
@@ -165,34 +166,66 @@ func (r *Captcha) Generate(ctx context.Context) (*contractcaptcha.Captcha, error
 	if !ok || redis.Default() == nil {
 		return nil, errors.New("请先初始化 Redis")
 	}
-	if err = redis.Default().Set(ctx, captchaRedisKey(result.Key), payload, time.Duration(expire)*time.Second).Err(); err != nil {
+	if err = redis.Default().Set(ctx, captchaRedisKey(scene, result.Key), payload, time.Duration(expire)*time.Second).Err(); err != nil {
 		return nil, err
 	}
 
 	return result, nil
 }
 
-// Verify loads the stored driver and validates the matching user data.
+// Verify validates the matching user data without consuming the captcha.
 func (r *Captcha) Verify(ctx context.Context, data contractcaptcha.VerifyData) error {
-	if !facades.Config().GetBool("captcha.enable", true) {
+	return r.verify(ctx, data, false)
+}
+
+// Use validates and consumes a captcha after the surrounding action succeeds.
+func (r *Captcha) Use(ctx context.Context, data contractcaptcha.VerifyData) error {
+	return r.verify(ctx, data, true)
+}
+
+func (r *Captcha) verify(ctx context.Context, data contractcaptcha.VerifyData, consume bool) error {
+	data.Scene = strings.TrimSpace(data.Scene)
+	if data.Scene == "" {
+		return errors.New("验证码场景不能为空")
+	}
+	data.Key = strings.TrimSpace(data.Key)
+	enabled, err := captchaSceneEnabled(data.Scene)
+	if err != nil {
+		return err
+	}
+	if !enabled {
 		return nil
 	}
+	if data.Key == "" {
+		return errors.New("验证码标识不能为空")
+	}
 
-	redisKey := captchaRedisKey(data.Key)
+	redisKey := captchaRedisKey(data.Scene, data.Key)
 	redis, ok := facades.OptionalRedis()
 	if !ok || redis.Default() == nil {
 		return errors.New("请先初始化 Redis")
 	}
 	payload, err := redis.Default().Get(ctx, redisKey).Bytes()
 	if err != nil {
-		return errors.New("验证码不存在或已过期")
+		if errors.Is(err, goredis.Nil) {
+			return errors.New("验证码不存在或已过期")
+		}
+		return err
 	}
 
 	var stored storedCaptcha
 	if err = json.Unmarshal(payload, &stored); err != nil {
 		return err
 	}
-	driver, err := r.Driver(stored.Driver)
+	// Accept captcha records written before engine and type were stored separately.
+	if stored.Type == "" {
+		stored.Type = stored.Driver
+		stored.Driver = DriverGoCaptcha
+	}
+	if stored.Driver != DriverGoCaptcha {
+		return errors.New("验证码引擎类型错误")
+	}
+	driver, err := r.Driver(stored.Type)
 	if err != nil {
 		return errors.New("验证码类型错误")
 	}
@@ -200,16 +233,25 @@ func (r *Captcha) Verify(ctx context.Context, data contractcaptcha.VerifyData) e
 		return err
 	}
 
-	return redis.Default().Del(ctx, redisKey).Err()
+	if consume {
+		deleted, err := redis.Default().Del(ctx, redisKey).Result()
+		if err != nil {
+			return err
+		}
+		if deleted != 1 {
+			return errors.New("验证码不存在或已过期")
+		}
+	}
+	return nil
 }
 
 // Generate creates a captcha through the registered application or a standalone application.
-func Generate(ctx context.Context) (*contractcaptcha.Captcha, error) {
+func Generate(ctx context.Context, scene string) (*contractcaptcha.Captcha, error) {
 	if application, ok := facades.Optional[contractcaptcha.Application](); ok {
-		return application.Generate(ctx)
+		return application.Generate(ctx, scene)
 	}
 
-	return newCaptcha().Generate(ctx)
+	return newCaptcha().Generate(ctx, scene)
 }
 
 // Verify validates a captcha through the registered application or a standalone application.
@@ -221,10 +263,28 @@ func Verify(ctx context.Context, data contractcaptcha.VerifyData) error {
 	return newCaptcha().Verify(ctx, data)
 }
 
+// Use validates and consumes a captcha through the registered application or a standalone application.
+func Use(ctx context.Context, data contractcaptcha.VerifyData) error {
+	if application, ok := facades.Optional[contractcaptcha.Application](); ok {
+		return application.Use(ctx, data)
+	}
+
+	return newCaptcha().Use(ctx, data)
+}
+
 func newCaptcha() *Captcha {
 	return &Captcha{drivers: make(map[string]contractcaptcha.Driver)}
 }
 
-func captchaRedisKey(key string) string {
-	return util.Keys("captcha", key)
+func captchaRedisKey(scene, key string) string {
+	return util.Keys("captcha", base64.RawURLEncoding.EncodeToString([]byte(scene)), key)
+}
+
+func captchaSceneEnabled(scene string) (bool, error) {
+	key := "captcha.scenes." + scene + ".enable"
+	if !facades.Config().IsSet(key) {
+		return false, fmt.Errorf("验证码场景未配置: %s", scene)
+	}
+
+	return facades.Config().GetBool(key), nil
 }

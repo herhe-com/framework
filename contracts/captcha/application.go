@@ -8,8 +8,9 @@ import (
 
 // Application generates and verifies captchas through configured drivers.
 type Application interface {
-	Generate(ctx context.Context) (*Captcha, error)
+	Generate(ctx context.Context, scene string) (*Captcha, error)
 	Verify(ctx context.Context, data VerifyData) error
+	Use(ctx context.Context, data VerifyData) error
 	Driver(driver string) (Driver, error)
 }
 
@@ -40,4 +41,13 @@ func (r VerifyData) Verify(ctx context.Context, application Application) error {
 	}
 
 	return application.Verify(ctx, r)
+}
+
+// Use validates and consumes a captcha through the application.
+func (r VerifyData) Use(ctx context.Context, application Application) error {
+	if application == nil {
+		return errors.New("请先初始化验证码服务")
+	}
+
+	return application.Use(ctx, r)
 }

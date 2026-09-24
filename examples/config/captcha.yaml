@@ -1,11 +1,16 @@
 # captcha 配置
 
 captcha:
-  # 是否启用验证码
-  enable: true
-
-  # click、slide、rotate 或 auto；auto 会随机选择一种验证码
-  driver: click
+  # 各业务场景的验证码设置；driver 为验证码引擎，type 为具体验证形式
+  scenes:
+    login:
+      enable: true
+      driver: go-captcha
+      type: click
+    register:
+      enable: true
+      driver: go-captcha
+      type: slide
 
   # 验证数据在 Redis 中的有效期，单位秒，必须大于 0
   expire: 300

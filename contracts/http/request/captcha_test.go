@@ -27,6 +27,7 @@ func TestCaptchaVerify(t *testing.T) {
 	application := &fakeCaptchaApplication{err: expectedErr}
 	input := Captcha{
 		Key:   "captcha-key",
+		Scene: "login",
 		Dots:  []contractcaptcha.Dot{{Index: 1, X: 10, Y: 20}},
 		X:     30,
 		Angle: 40,
@@ -48,11 +49,11 @@ func TestCaptchaVerify(t *testing.T) {
 func TestCaptchaValidation(t *testing.T) {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 
-	if err := validate.Struct(Captcha{Key: "captcha-key"}); err != nil {
+	if err := validate.Struct(Captcha{Key: "captcha-key", Scene: "login"}); err != nil {
 		t.Fatalf("validate captcha: %v", err)
 	}
-	if err := validate.Struct(Captcha{}); err != nil {
-		t.Fatalf("validate empty captcha: %v", err)
+	if err := validate.Struct(Captcha{}); err == nil {
+		t.Fatal("expected missing captcha scene error")
 	}
 	if err := validate.Struct(Captcha{Key: "captcha-key", X: -1}); err == nil {
 		t.Fatal("expected invalid captcha position error")

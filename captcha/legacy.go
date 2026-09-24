@@ -12,7 +12,7 @@ import (
 
 // Click generates a click captcha without storing it in Redis.
 func Click() (*contractcaptcha.Click, error) {
-	driver, err := NewDriver(DriverClick)
+	driver, err := NewDriver(TypeClick)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func ClickVerify(sources []contractcaptcha.Dot, targets []goclick.Dot) error {
 	if err != nil {
 		return err
 	}
-	driver, err := NewDriver(DriverClick)
+	driver, err := NewDriver(TypeClick)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func ClickVerify(sources []contractcaptcha.Dot, targets []goclick.Dot) error {
 
 // Slide generates a slide captcha without storing it in Redis.
 func Slide() (*contractcaptcha.Slide, error) {
-	driver, err := NewDriver(DriverSlide)
+	driver, err := NewDriver(TypeSlide)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func SlideVerify(x int, target *goslide.Block) error {
 	if err != nil {
 		return err
 	}
-	driver, err := NewDriver(DriverSlide)
+	driver, err := NewDriver(TypeSlide)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func SlideVerify(x int, target *goslide.Block) error {
 
 // Rotate generates a rotate captcha without storing it in Redis.
 func Rotate() (*contractcaptcha.Rotate, error) {
-	driver, err := NewDriver(DriverRotate)
+	driver, err := NewDriver(TypeRotate)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func RotateVerify(angle int, target *gorotate.Block) error {
 	if err != nil {
 		return err
 	}
-	driver, err := NewDriver(DriverRotate)
+	driver, err := NewDriver(TypeRotate)
 	if err != nil {
 		return err
 	}

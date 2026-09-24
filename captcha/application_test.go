@@ -25,13 +25,13 @@ func TestDisabledCaptchaBypassesGenerateAndVerify(t *testing.T) {
 	if err := frameworkconfig.NewApplication(); err != nil {
 		t.Fatalf("initialize config: %v", err)
 	}
-	facades.Config().Set("captcha.enable", false)
+	facades.Config().Set("captcha.scenes.login.enable", false)
 
-	result, err := Generate(context.Background())
+	result, err := Generate(context.Background(), "login")
 	if err != nil || result != nil {
 		t.Fatalf("generate disabled captcha: result=%v, err=%v", result, err)
 	}
-	if err := Verify(context.Background(), captcha.VerifyData{}); err != nil {
+	if err := Verify(context.Background(), captcha.VerifyData{Scene: "login"}); err != nil {
 		t.Fatalf("verify disabled captcha: %v", err)
 	}
 }
@@ -48,7 +48,7 @@ func TestSlideChallengeExposesDisplayY(t *testing.T) {
 		t.Fatalf("initialize config: %v", err)
 	}
 
-	driver, err := NewDriver(DriverSlide)
+	driver, err := NewDriver(TypeSlide)
 	if err != nil {
 		t.Fatalf("create slide driver: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestNewDriver(t *testing.T) {
 		t.Fatalf("initialize config: %v", err)
 	}
 
-	for _, name := range []string{DriverClick, DriverSlide, DriverRotate} {
+	for _, name := range []string{TypeClick, TypeSlide, TypeRotate} {
 		driver, err := NewDriver(name)
 		if err != nil {
 			t.Fatalf("create %s driver: %v", name, err)
@@ -222,11 +222,11 @@ func TestNewDriver(t *testing.T) {
 	}
 
 	application := newCaptcha()
-	first, err := application.Driver(DriverClick)
+	first, err := application.Driver(TypeClick)
 	if err != nil {
 		t.Fatalf("create cached click driver: %v", err)
 	}
-	second, err := application.Driver(DriverClick)
+	second, err := application.Driver(TypeClick)
 	if err != nil {
 		t.Fatalf("load cached click driver: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestSlideAndRotateVerify(t *testing.T) {
 		t.Fatalf("verify slide: %v", err)
 	}
 
-	driver, err := NewDriver(DriverSlide)
+	driver, err := NewDriver(TypeSlide)
 	if err != nil {
 		t.Fatalf("create slide driver: %v", err)
 	}

@@ -31,6 +31,7 @@ type Dot struct {
 type Captcha struct {
 	Key    string `json:"key"`
 	Driver string `json:"driver"`
+	Type   string `json:"type"`
 	Master string `json:"master"`
 	Thumb  string `json:"thumb"`
 	Y      int    `json:"y,omitempty"`
@@ -43,6 +44,7 @@ type Captcha struct {
 // verify a zero coordinate; use Dots instead.
 type VerifyData struct {
 	Key   string `json:"key" form:"key" validate:"omitempty" label:"验证码标识"`
+	Scene string `json:"scene" form:"scene" validate:"required" label:"验证码场景"`
 	Dots  []Dot  `json:"dots" form:"dots" validate:"omitempty,min=1,dive" label:"点击坐标"`
 	X     int    `json:"x" form:"x" validate:"min=0" label:"滑块横坐标"`
 	Angle int    `json:"angle" form:"angle" validate:"min=0" label:"旋转角度"`
