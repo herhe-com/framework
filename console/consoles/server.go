@@ -64,6 +64,7 @@ func (*ServerProvider) Register() console.Console {
 				serv.GET("/swagger/*any", adaptor.HertzHandler(httpSwagger.Handler(
 					httpSwagger.UIConfig(map[string]string{
 						"defaultModelsExpandDepth": "-1",
+						"showExtensions":           "true",
 					}),
 				)))
 			}
