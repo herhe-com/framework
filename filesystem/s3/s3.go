@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -372,6 +373,53 @@ func (r *S3) PresignedUploadUrl(file string, timer time.Duration) (string, error
 	return request.URL, nil
 }
 
+// TemporaryUpload returns a temporary upload credential that allows a client
+// to upload the file directly to the S3 compatible storage with a presigned
+// PUT request. The credential is embedded in the Url, so the client should
+// send only the raw file body, without extra headers such as Content-Type,
+// otherwise the signature validation fails.
+func (r *S3) TemporaryUpload(file string, timer time.Duration) (*filesystem.TemporaryUpload, error) {
+	file = strings.TrimPrefix(file, "/")
+
+	presignClient := s3.NewPresignClient(r.instance)
+
+	request, err := presignClient.PresignPutObject(r.ctx, &s3.PutObjectInput{
+		Bucket: aws.String(r.bucket),
+		Key:    aws.String(file),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = timer
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &filesystem.TemporaryUpload{
+		Driver:    "s3",
+		Url:       request.URL,
+		Method:    request.Method,
+		Headers:   signedHeaders(request.SignedHeader),
+		Key:       file,
+		ExpiresAt: time.Now().Add(timer),
+	}, nil
+}
+
+// signedHeaders converts the signed headers of a presigned request into a
+// simple map, excluding Host, which is handled by the HTTP client itself.
+func signedHeaders(header http.Header) map[string]string {
+
+	headers := make(map[string]string)
+
+	for name, values := range header {
+		if strings.EqualFold(name, "Host") || len(values) == 0 {
+			continue
+		}
+		headers[http.CanonicalHeaderKey(name)] = values[0]
+	}
+
+	return headers
+}
+
 func (r *S3) Url(file string) string {
 	realUrl := strings.TrimSuffix(r.domain, "/")
 	if !strings.HasSuffix(realUrl, r.bucket) {
@@ -379,4 +427,76 @@ func (r *S3) Url(file string) string {
 	}
 
 	return realUrl + "/" + strings.TrimPrefix(file, "/")
+}
+
+func (r *S3) InitiateMultipartUpload(file string) (string, error) {
+
+	output, err := r.instance.CreateMultipartUpload(r.ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(r.bucket),
+		Key:    aws.String(strings.TrimLeft(file, "/")),
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return aws.ToString(output.UploadId), nil
+}
+
+func (r *S3) UploadMultipartPart(file, uploadID string, number int64, content io.Reader, size int64) (string, error) {
+
+	buffer, err := io.ReadAll(content)
+
+	if err != nil {
+		return "", err
+	}
+
+	output, err := r.instance.UploadPart(r.ctx, &s3.UploadPartInput{
+		Bucket:        aws.String(r.bucket),
+		Key:           aws.String(strings.TrimLeft(file, "/")),
+		UploadId:      aws.String(uploadID),
+		PartNumber:    aws.Int32(int32(number)),
+		Body:          bytes.NewReader(buffer),
+		ContentLength: aws.Int64(size),
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return aws.ToString(output.ETag), nil
+}
+
+func (r *S3) CompleteMultipartUpload(file, uploadID string, parts []filesystem.MultipartPart) error {
+
+	sort.Slice(parts, func(i, j int) bool { return parts[i].Number < parts[j].Number })
+
+	completed := make([]types.CompletedPart, len(parts))
+
+	for i, part := range parts {
+		completed[i] = types.CompletedPart{
+			PartNumber: aws.Int32(int32(part.Number)),
+			ETag:       aws.String(part.ETag),
+		}
+	}
+
+	_, err := r.instance.CompleteMultipartUpload(r.ctx, &s3.CompleteMultipartUploadInput{
+		Bucket:          aws.String(r.bucket),
+		Key:             aws.String(strings.TrimLeft(file, "/")),
+		UploadId:        aws.String(uploadID),
+		MultipartUpload: &types.CompletedMultipartUpload{Parts: completed},
+	})
+
+	return err
+}
+
+func (r *S3) AbortMultipartUpload(file, uploadID string) error {
+
+	_, err := r.instance.AbortMultipartUpload(r.ctx, &s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(r.bucket),
+		Key:      aws.String(strings.TrimLeft(file, "/")),
+		UploadId: aws.String(uploadID),
+	})
+
+	return err
 }

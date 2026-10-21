@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -321,6 +322,71 @@ func (r *Minio) PresignedUploadUrl(file string, timer time.Duration) (string, er
 	}
 
 	return presignedURL.String(), nil
+}
+
+// TemporaryUpload returns a temporary upload credential that allows a client
+// to upload the file directly to the Minio storage with a presigned PUT
+// request. The credential is embedded in the Url, so the client should send
+// only the raw file body, without extra headers such as Content-Type,
+// otherwise the signature validation fails.
+func (r *Minio) TemporaryUpload(file string, timer time.Duration) (*filesystem.TemporaryUpload, error) {
+	file = strings.TrimPrefix(file, "/")
+
+	presignedURL, err := r.instance.PresignedPutObject(r.ctx, r.bucket, file, timer)
+	if err != nil {
+		return nil, err
+	}
+
+	return &filesystem.TemporaryUpload{
+		Driver:    "minio",
+		Url:       presignedURL.String(),
+		Method:    http.MethodPut,
+		Key:       file,
+		ExpiresAt: time.Now().Add(timer),
+	}, nil
+}
+
+func (r *Minio) core() *minio.Core {
+	return &minio.Core{Client: r.instance}
+}
+
+func (r *Minio) InitiateMultipartUpload(file string) (string, error) {
+
+	return r.core().NewMultipartUpload(r.ctx, r.bucket, file, minio.PutObjectOptions{})
+}
+
+func (r *Minio) UploadMultipartPart(file, uploadID string, number int64, content io.Reader, size int64) (string, error) {
+
+	part, err := r.core().PutObjectPart(r.ctx, r.bucket, file, uploadID, int(number), content, size, minio.PutObjectPartOptions{})
+
+	if err != nil {
+		return "", err
+	}
+
+	return part.ETag, nil
+}
+
+func (r *Minio) CompleteMultipartUpload(file, uploadID string, parts []filesystem.MultipartPart) error {
+
+	sort.Slice(parts, func(i, j int) bool { return parts[i].Number < parts[j].Number })
+
+	completed := make([]minio.CompletePart, len(parts))
+
+	for i, part := range parts {
+		completed[i] = minio.CompletePart{
+			PartNumber: int(part.Number),
+			ETag:       part.ETag,
+		}
+	}
+
+	_, err := r.core().CompleteMultipartUpload(r.ctx, r.bucket, file, uploadID, completed, minio.PutObjectOptions{})
+
+	return err
+}
+
+func (r *Minio) AbortMultipartUpload(file, uploadID string) error {
+
+	return r.core().AbortMultipartUpload(r.ctx, r.bucket, file, uploadID)
 }
 
 func (r *Minio) Url(file string) string {

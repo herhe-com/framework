@@ -3,10 +3,13 @@ package qiniu
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +39,7 @@ type Qiniu struct {
 	secret    string
 	bucket    string
 	domain    string
+	uploadUrl string
 	delimiter string
 	prefix    string
 }
@@ -53,6 +57,7 @@ func NewQiniu(ctx context.Context, configs map[string]any) (*Qiniu, error) {
 	secret := cfg.GetString("qiniu.secret")
 	bucket := cfg.GetString("qiniu.bucket")
 	domain := cfg.GetString("qiniu.domain")
+	uploadUrl := cfg.GetString("qiniu.upload_url")
 	delimiter := cfg.GetString("qiniu.delimiter")
 	prefix := cfg.GetString("qiniu.prefix")
 
@@ -64,6 +69,7 @@ func NewQiniu(ctx context.Context, configs map[string]any) (*Qiniu, error) {
 		secret:    secret,
 		bucket:    bucket,
 		domain:    domain,
+		uploadUrl: uploadUrl,
 		delimiter: delimiter,
 		prefix:    strings.TrimSuffix(prefix, delimiter) + delimiter,
 	}
@@ -328,6 +334,180 @@ func (r *Qiniu) PresignedUploadUrl(key string, timer time.Duration) (string, err
 	}
 
 	return policy.UploadToken(r.mac()), nil
+}
+
+// TemporaryUpload returns a temporary upload credential that allows a client
+// to upload the file directly to the Qiniu storage. Unlike the presigned URL
+// based drivers, the client should send a multipart form POST request to the
+// Url, including the Fields and the Token as form fields, with the file under
+// the "file" field.
+func (r *Qiniu) TemporaryUpload(key string, timer time.Duration) (*filesystem.TemporaryUpload, error) {
+
+	key = r.realPath(key)
+
+	policy := storage.PutPolicy{
+		Scope:   fmt.Sprintf("%s:%s", r.bucket, key),
+		Expires: uint64(timer.Seconds()),
+	}
+
+	token := policy.UploadToken(r.mac())
+
+	url, err := r.uploadEndpoint()
+	if err != nil {
+		return nil, fmt.Errorf("get qiniu upload url error: %w", err)
+	}
+
+	return &filesystem.TemporaryUpload{
+		Driver: "qiniu",
+		Token:  token,
+		Url:    url,
+		Method: http.MethodPost,
+		Fields: map[string]string{
+			"key":   key,
+			"token": token,
+		},
+		Key:       key,
+		ExpiresAt: time.Now().Add(timer),
+	}, nil
+}
+
+func (r *Qiniu) InitiateMultipartUpload(file string) (string, error) {
+
+	key := r.realPath(file)
+
+	host, err := r.uploadEndpoint()
+	if err != nil {
+		return "", err
+	}
+
+	var ret storage.InitPartsRet
+
+	uploader := storage.NewResumeUploaderV2(nil)
+
+	if err = uploader.InitParts(r.ctx, r.multipartToken(key), host, r.bucket, key, true, &ret); err != nil {
+		return "", err
+	}
+
+	return ret.UploadID, nil
+}
+
+func (r *Qiniu) UploadMultipartPart(file, uploadID string, number int64, content io.Reader, size int64) (string, error) {
+
+	key := r.realPath(file)
+
+	host, err := r.uploadEndpoint()
+	if err != nil {
+		return "", err
+	}
+
+	var ret storage.UploadPartsRet
+
+	uploader := storage.NewResumeUploaderV2(nil)
+
+	if err = uploader.UploadParts(r.ctx, r.multipartToken(key), host, r.bucket, key, true, uploadID, number, "", &ret, content, int(size)); err != nil {
+		return "", err
+	}
+
+	return ret.Etag, nil
+}
+
+func (r *Qiniu) CompleteMultipartUpload(file, uploadID string, parts []filesystem.MultipartPart) error {
+
+	key := r.realPath(file)
+
+	host, err := r.uploadEndpoint()
+	if err != nil {
+		return err
+	}
+
+	sort.Slice(parts, func(i, j int) bool { return parts[i].Number < parts[j].Number })
+
+	extra := &storage.RputV2Extra{
+		Progresses: make([]storage.UploadPartInfo, len(parts)),
+	}
+
+	for i, part := range parts {
+		extra.Progresses[i] = storage.UploadPartInfo{
+			Etag:       part.ETag,
+			PartNumber: part.Number,
+		}
+	}
+
+	uploader := storage.NewResumeUploaderV2(nil)
+
+	ret := make(map[string]any)
+
+	return uploader.CompleteParts(r.ctx, r.multipartToken(key), host, &ret, r.bucket, key, true, uploadID, extra)
+}
+
+func (r *Qiniu) AbortMultipartUpload(file, uploadID string) error {
+
+	key := r.realPath(file)
+
+	host, err := r.uploadEndpoint()
+	if err != nil {
+		return err
+	}
+
+	uri := fmt.Sprintf("%s/buckets/%s/objects/%s/uploads/%s",
+		strings.TrimSuffix(host, "/"),
+		r.bucket,
+		base64.URLEncoding.EncodeToString([]byte(key)),
+		uploadID,
+	)
+
+	request, err := http.NewRequestWithContext(r.ctx, http.MethodDelete, uri, nil)
+	if err != nil {
+		return err
+	}
+
+	request.Header.Set("Authorization", "UpToken "+r.multipartToken(key))
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return err
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("abort qiniu multipart upload error: %s", response.Status)
+	}
+
+	return nil
+}
+
+// multipartToken returns an upload token scoped to the given real object key,
+// valid long enough for a multipart upload session.
+func (r *Qiniu) multipartToken(key string) string {
+
+	policy := storage.PutPolicy{
+		Scope:   fmt.Sprintf("%s:%s", r.bucket, key),
+		Expires: 86400,
+	}
+
+	return policy.UploadToken(r.mac())
+}
+
+// uploadEndpoint returns the qiniu upload endpoint for the bucket. It prefers the
+// configured "upload_url" value, and otherwise resolves the bucket region's
+// upload host. The region lookup is cached by the qiniu SDK.
+func (r *Qiniu) uploadEndpoint() (string, error) {
+
+	if r.uploadUrl != "" {
+		return r.uploadUrl, nil
+	}
+
+	region, err := storage.GetRegion(r.access, r.bucket)
+	if err != nil {
+		return "", err
+	}
+
+	if len(region.SrcUpHosts) == 0 {
+		return "", errors.New("no upload host found for qiniu bucket")
+	}
+
+	return fmt.Sprintf("https://%s", region.SrcUpHosts[0]), nil
 }
 
 func (r *Qiniu) SetRedis(client *redis.Client) {
