@@ -477,5 +477,6 @@ func AuthMiddleware() app.HandlerFunc {
 ```
 http/
 ├── response.go      # 响应辅助函数
-└── middleware/      # HTTP 中间件
+├── middleware/      # HTTP 中间件
+└── swagger/         # 带深色主题的 Swagger UI 处理器（内嵌 theme.js）
 ```

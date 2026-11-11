@@ -11,8 +11,8 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/herhe-com/framework/contracts/console"
 	"github.com/herhe-com/framework/facades"
+	"github.com/herhe-com/framework/http/swagger"
 	"github.com/spf13/cobra"
-	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 type ServerProvider struct {
@@ -61,12 +61,7 @@ func (*ServerProvider) Register() console.Console {
 			}
 
 			if facades.Config().GetBool("app.debug") {
-				serv.GET("/swagger/*any", adaptor.HertzHandler(httpSwagger.Handler(
-					httpSwagger.UIConfig(map[string]string{
-						"defaultModelsExpandDepth": "-1",
-						"showExtensions":           "true",
-					}),
-				)))
+				serv.GET("/swagger/*any", adaptor.HertzHandler(swagger.Handler()))
 			}
 
 			serv.Spin()
