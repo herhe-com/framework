@@ -1,7 +1,9 @@
 package queue
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -93,4 +95,63 @@ func TestHasPositiveRetryDelay(t *testing.T) {
 	if !HasPositiveRetryDelay([]time.Duration{0, time.Second}) {
 		t.Fatal("HasPositiveRetryDelay(mixed) = false")
 	}
+}
+
+func TestCallHandler(t *testing.T) {
+	t.Run("nil handler", func(t *testing.T) {
+		if _, err := CallHandler("test", nil, nil, time.Second); err == nil {
+			t.Fatal("CallHandler() error = nil, want an error")
+		}
+	})
+
+	t.Run("unlimited", func(t *testing.T) {
+		response, err := CallHandler("test", func([]byte) (any, error) {
+			time.Sleep(50 * time.Millisecond)
+
+			return "ok", nil
+		}, nil, 0)
+		if err != nil || response != "ok" {
+			t.Fatalf("CallHandler() = (%v, %v), want (ok, nil)", response, err)
+		}
+	})
+
+	t.Run("fast handler", func(t *testing.T) {
+		response, err := CallHandler("test", func([]byte) (any, error) {
+			return "ok", nil
+		}, nil, time.Second)
+		if err != nil || response != "ok" {
+			t.Fatalf("CallHandler() = (%v, %v), want (ok, nil)", response, err)
+		}
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		start := time.Now()
+		response, err := CallHandler("test", func([]byte) (any, error) {
+			time.Sleep(500 * time.Millisecond)
+
+			return "late", nil
+		}, nil, 20*time.Millisecond)
+
+		if !errors.Is(err, ErrHandlerTimeout) {
+			t.Fatalf("CallHandler() error = %v, want ErrHandlerTimeout", err)
+		}
+		if !strings.Contains(err.Error(), "timed out after 20ms") {
+			t.Fatalf("CallHandler() error = %v, want the timeout duration", err)
+		}
+		if response != nil {
+			t.Fatalf("CallHandler() response = %v, want nil", response)
+		}
+		if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
+			t.Fatalf("CallHandler() blocked for %s, want it to return at the timeout", elapsed)
+		}
+	})
+
+	t.Run("handler error wins", func(t *testing.T) {
+		_, err := CallHandler("test", func([]byte) (any, error) {
+			return nil, errors.New("boom")
+		}, nil, time.Second)
+		if err == nil || err.Error() != "boom" {
+			t.Fatalf("CallHandler() error = %v, want boom", err)
+		}
+	})
 }

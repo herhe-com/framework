@@ -1,15 +1,19 @@
 package rabbitmq
 
-import rabbitmqclient "github.com/wagslane/go-rabbitmq"
-
-// Action controls how a RabbitMQ delivery is acknowledged.
-type Action = rabbitmqclient.Action
+// Action controls how a delivery is acknowledged after the handler returns.
+//
+// The numeric values are unchanged from the previous client library so stored
+// or logged values keep their meaning.
+type Action int
 
 const (
 	// Ack acknowledges a successfully processed message.
-	Ack = rabbitmqclient.Ack
+	Ack Action = iota
 	// NackDiscard rejects the message without requeueing it.
-	NackDiscard = rabbitmqclient.NackDiscard
+	NackDiscard
 	// NackRequeue rejects the message and asks RabbitMQ to redeliver it.
-	NackRequeue = rabbitmqclient.NackRequeue
+	NackRequeue
+	// Manual leaves acknowledgement to the handler. It is not supported by the
+	// driver and is rejected like any unknown action.
+	Manual
 )

@@ -25,6 +25,14 @@ import (
 const (
 	managedStreamMetadata     = "framework.queue.managed"
 	consumerTTLStreamMetadata = "framework.queue.consumer_ttl"
+
+	// defaultAckWait is JetStream's own acknowledgement window.
+	defaultAckWait = 30 * time.Second
+	// defaultMaxAckPending keeps a single message in flight. Handlers run one at
+	// a time, and JetStream starts the acknowledgement clock when a message is
+	// delivered, so a larger window only queues messages that expire before the
+	// handler reaches them and get handled twice.
+	defaultMaxAckPending = 1
 )
 
 // Action controls how a JetStream message is acknowledged.
@@ -72,6 +80,9 @@ type queueOptions struct {
 	stream         string
 	schedulePrefix string
 	retention      time.Duration
+	ackWait        time.Duration
+	maxAckPending  int
+	handlerTimeout time.Duration
 }
 
 var _ contractqueue.Driver = (*NATS)(nil)
@@ -241,14 +252,20 @@ func (r *NATS) Consumer(handler contractqueue.Handler, key string) error {
 	if len(subjects) == 0 {
 		return errors.New("nats: subject is required")
 	}
-	if options.delayed || options.ttl > 0 {
+	if options.needsSchedules() {
+		if err = r.requireScheduleSupport(); err != nil {
+			return err
+		}
+	}
+
+	if options.needsJetStream() {
 		return r.consumeJetStream(handler, subjects, options)
 	}
 
 	callback := func(message *natsgo.Msg) {
 		headers := headersFromNATS(message.Header)
 		retried := contractqueue.RetryCount(headers)
-		_, consumeErr := handler(message.Data)
+		_, consumeErr := contractqueue.CallHandler("nats", handler, message.Data, options.handlerTimeout)
 		if consumeErr == nil {
 			return
 		}
@@ -256,7 +273,7 @@ func (r *NATS) Consumer(handler contractqueue.Handler, key string) error {
 			if retryErr := r.requeue(message.Data, headers, message.Subject, options, retried); retryErr == nil {
 				return
 			} else {
-				color.Errorf("[queue.nats] requeue message: %v", retryErr)
+				color.Errorf("[queue.nats] requeue message: %v\n", retryErr)
 			}
 		}
 
@@ -268,7 +285,7 @@ func (r *NATS) Consumer(handler contractqueue.Handler, key string) error {
 				retried,
 				consumeErr,
 			); publishErr != nil {
-				color.Errorf("[queue.nats] publish error message: %v", publishErr)
+				color.Errorf("[queue.nats] publish error message: %v\n", publishErr)
 			}
 		}
 	}
@@ -324,6 +341,10 @@ func (r *NATS) publishDelayed(
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if err := r.requireScheduleSupport(); err != nil {
+		return err
+	}
+
 	ttl = options.delayedMessageTTL(ttl)
 	_, scheduleSubject, err := r.ensureStream(ctx, target, delay+ttl, true, 0, options)
 	if err != nil {
@@ -341,14 +362,22 @@ func (r *NATS) publishDelayed(
 		strconv.FormatInt(delay.Milliseconds(), 10),
 	)
 	message.Header.Set(jetstream.MsgTTLHeader, "never")
-
-	_, err = r.js.PublishMsg(
-		ctx,
-		message,
-		jetstream.WithScheduleAt(time.Now().Add(delay)),
-		jetstream.WithScheduleTarget(target),
-		jetstream.WithScheduleTTL(ttl),
+	// The schedule headers are set by hand: nats.go formats `@at` with
+	// time.RFC3339, which drops the sub-second part and fires up to a second
+	// early.
+	//
+	// Upgrade checklist: when github.com/nats-io/nats.go is bumped, re-check
+	// that jetstream.ScheduleHeader still means `@at` and that nats-server still
+	// parses it with time.RFC3339Nano; see queue/README.md. Remove this block
+	// once WithScheduleAt keeps the sub-second part.
+	message.Header.Set(
+		jetstream.ScheduleHeader,
+		"@at "+time.Now().Add(delay).UTC().Format(time.RFC3339Nano),
 	)
+	message.Header.Set(jetstream.ScheduleTargetHeader, target)
+	message.Header.Set(jetstream.ScheduleTTLHeader, ttl.String())
+
+	_, err = r.js.PublishMsg(ctx, message)
 
 	return err
 }
@@ -371,7 +400,7 @@ func (r *NATS) consumeJetStream(
 
 	for _, subject := range subjects {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		streamName, _, err := r.ensureStream(ctx, subject, 0, options.delayed, options.ttl, options)
+		streamName, _, err := r.ensureStream(ctx, subject, 0, options.needsSchedules(), options.ttl, options)
 		if err != nil {
 			cancel()
 			return err
@@ -381,6 +410,8 @@ func (r *NATS) consumeJetStream(
 			Durable:       consumerName(options.queue, subject),
 			AckPolicy:     jetstream.AckExplicitPolicy,
 			FilterSubject: subject,
+			AckWait:       options.ackWait,
+			MaxAckPending: options.maxAckPending,
 			MaxDeliver:    -1,
 		})
 		cancel()
@@ -389,27 +420,30 @@ func (r *NATS) consumeJetStream(
 		}
 
 		consumeContext, err := consumer.Consume(func(message jetstream.Msg) {
+			stopKeepAlive := keepAlive(message, options.ackWait)
+			defer stopKeepAlive()
+
 			headers := headersFromNATS(message.Headers())
 			retried := contractqueue.RetryCount(headers)
-			response, consumeErr := handler(message.Data())
+			response, consumeErr := contractqueue.CallHandler("nats", handler, message.Data(), options.handlerTimeout)
 			if consumeErr == nil {
 				if ackErr := acknowledge(message, response); ackErr != nil {
-					color.Errorf("[queue.nats] acknowledge JetStream message: %v", ackErr)
+					color.Errorf("[queue.nats] acknowledge JetStream message: %v\n", ackErr)
 				}
 				return
 			}
 
 			if _, ok := contractqueue.RetryAfter(options.retry, retried); ok {
 				if retryErr := r.requeue(message.Data(), headers, message.Subject(), options, retried); retryErr != nil {
-					color.Errorf("[queue.nats] requeue JetStream message: %v", retryErr)
+					color.Errorf("[queue.nats] requeue JetStream message: %v\n", retryErr)
 					if nakErr := message.Nak(); nakErr != nil {
-						color.Errorf("[queue.nats] retry JetStream message: %v", nakErr)
+						color.Errorf("[queue.nats] retry JetStream message: %v\n", nakErr)
 					}
 					return
 				}
 
 				if ackErr := acknowledge(message, response); ackErr != nil {
-					color.Errorf("[queue.nats] acknowledge requeued JetStream message: %v", ackErr)
+					color.Errorf("[queue.nats] acknowledge requeued JetStream message: %v\n", ackErr)
 				}
 				return
 			}
@@ -422,14 +456,14 @@ func (r *NATS) consumeJetStream(
 					retried,
 					consumeErr,
 				); publishErr != nil {
-					color.Errorf("[queue.nats] publish error message: %v", publishErr)
+					color.Errorf("[queue.nats] publish error message: %v\n", publishErr)
 					_ = message.Nak()
 					return
 				}
 			}
 
 			if ackErr := acknowledge(message, response); ackErr != nil {
-				color.Errorf("[queue.nats] acknowledge failed JetStream message: %v", ackErr)
+				color.Errorf("[queue.nats] acknowledge failed JetStream message: %v\n", ackErr)
 			}
 		})
 		if err != nil {
@@ -515,7 +549,7 @@ func (r *NATS) ensureStream(
 		if scheduling {
 			subjects = append(subjects, scheduleSubject)
 		}
-		_, err = r.js.CreateStream(ctx, jetstream.StreamConfig{
+		stream, err = r.js.CreateStream(ctx, jetstream.StreamConfig{
 			Name:              streamName,
 			Subjects:          subjects,
 			MaxAge:            maxAge,
@@ -526,6 +560,11 @@ func (r *NATS) ensureStream(
 		})
 		if err != nil {
 			return "", "", fmt.Errorf("nats: create queue stream %s: %w", streamName, err)
+		}
+		if scheduling {
+			if err = requireSchedules(ctx, stream, streamName); err != nil {
+				return "", "", err
+			}
 		}
 
 		r.streams[target] = streamBinding{
@@ -625,6 +664,11 @@ func (r *NATS) ensureStream(
 		}
 		info = stream.CachedInfo()
 	}
+	if scheduling {
+		if err = requireSchedules(ctx, stream, streamName); err != nil {
+			return "", "", err
+		}
+	}
 
 	maxAge := time.Duration(0)
 	if info != nil {
@@ -638,6 +682,19 @@ func (r *NATS) ensureStream(
 	}
 
 	return streamName, scheduleSubject, nil
+}
+
+// needsJetStream reports whether the queue must be consumed through JetStream.
+// Scheduled retries are only visible to JetStream consumers: the broker appends
+// them to the stream instead of publishing to core subscribers.
+func (r queueOptions) needsJetStream() bool {
+	return r.delayed || r.delay > 0 || r.ttl > 0 || contractqueue.HasPositiveRetryDelay(r.retry)
+}
+
+// needsSchedules reports whether the queue needs broker-side message schedules,
+// either for a delayed first produce or for tiered retries.
+func (r queueOptions) needsSchedules() bool {
+	return r.delay > 0 || contractqueue.HasPositiveRetryDelay(r.retry)
 }
 
 func (r queueOptions) scheduleSubject(stream string) string {
@@ -780,6 +837,25 @@ func (r *NATS) queueOptions(key string) (queueOptions, error) {
 	if schedulePrefix == "" {
 		schedulePrefix = "_framework.queue.schedule"
 	}
+	ackWait, err := config.Duration("ack_wait", r.cfg.GetDuration("nats.ack_wait"))
+	if err != nil {
+		return queueOptions{}, err
+	}
+	if ackWait <= 0 {
+		ackWait = defaultAckWait
+	}
+	maxAckPending := config.Int("max_ack_pending", r.cfg.GetInt("nats.max_ack_pending"))
+	if maxAckPending <= 0 {
+		maxAckPending = defaultMaxAckPending
+	}
+	handlerTimeout := contractqueue.DefaultHandlerTimeout
+	if r.cfg.IsSet("nats.handler_timeout") {
+		handlerTimeout = r.cfg.GetDuration("nats.handler_timeout")
+	}
+	handlerTimeout, err = config.Duration("handler_timeout", handlerTimeout)
+	if err != nil {
+		return queueOptions{}, err
+	}
 
 	return queueOptions{
 		topic:          config.String("topic", ""),
@@ -795,41 +871,10 @@ func (r *NATS) queueOptions(key string) (queueOptions, error) {
 		stream:         config.String("stream", r.cfg.GetString("nats.stream")),
 		schedulePrefix: schedulePrefix,
 		retention:      retention,
+		ackWait:        ackWait,
+		maxAckPending:  maxAckPending,
+		handlerTimeout: handlerTimeout,
 	}, nil
-}
-
-type acknowledgeMessage interface {
-	Ack() error
-	Nak() error
-	Term() error
-}
-
-func acknowledge(message acknowledgeMessage, response any) error {
-	if response == nil {
-		return message.Ack()
-	}
-
-	action, ok := response.(Action)
-	if !ok {
-		if err := message.Nak(); err != nil {
-			return fmt.Errorf("nats: invalid consumer response %T: %w", response, err)
-		}
-		return fmt.Errorf("nats: invalid consumer response %T; message negatively acknowledged", response)
-	}
-
-	switch action {
-	case Ack:
-		return message.Ack()
-	case Nak:
-		return message.Nak()
-	case Term:
-		return message.Term()
-	default:
-		if err := message.Nak(); err != nil {
-			return fmt.Errorf("nats: invalid consumer action %d: %w", action, err)
-		}
-		return fmt.Errorf("nats: invalid consumer action %d; message negatively acknowledged", action)
-	}
 }
 
 func (r *NATS) signalDone() {

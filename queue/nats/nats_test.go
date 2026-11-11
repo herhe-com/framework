@@ -143,6 +143,63 @@ func TestRequeueUsesTieredRetryDelay(t *testing.T) {
 	}
 }
 
+func TestServerVersionAtLeast(t *testing.T) {
+	tests := []struct {
+		version string
+		want    bool
+	}{
+		{version: "2.12.0", want: true},
+		{version: "2.12.1", want: true},
+		{version: "v2.12.1", want: true},
+		{version: "2.13.0", want: true},
+		{version: "2.15.2", want: true},
+		{version: "3.0.0", want: true},
+		{version: "2.12.0-RC.1", want: true},
+		{version: "2.12-beta.1", want: true},
+		{version: "2.11.6"},
+		{version: "2.9.25"},
+		{version: "1.99.0"},
+		{version: "2"},
+		{version: ""},
+		{version: "garbage"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.version, func(t *testing.T) {
+			if got := serverVersionAtLeast(tt.version, 2, 12); got != tt.want {
+				t.Fatalf("serverVersionAtLeast(%q) = %v, want %v", tt.version, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestQueueOptionsConsumptionMode(t *testing.T) {
+	tests := []struct {
+		name           string
+		options        queueOptions
+		needsJetStream bool
+		needsSchedules bool
+	}{
+		{name: "plain queue"},
+		{name: "legacy delayed flag", options: queueOptions{delayed: true}, needsJetStream: true},
+		{name: "delayed produce", options: queueOptions{delay: time.Second}, needsJetStream: true, needsSchedules: true},
+		{name: "message ttl", options: queueOptions{ttl: time.Minute}, needsJetStream: true},
+		{name: "tiered retry", options: queueOptions{retry: []time.Duration{time.Minute}}, needsJetStream: true, needsSchedules: true},
+		{name: "immediate retry only", options: queueOptions{retry: []time.Duration{0, 0}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.options.needsJetStream(); got != tt.needsJetStream {
+				t.Fatalf("needsJetStream() = %v, want %v", got, tt.needsJetStream)
+			}
+			if got := tt.options.needsSchedules(); got != tt.needsSchedules {
+				t.Fatalf("needsSchedules() = %v, want %v", got, tt.needsSchedules)
+			}
+		})
+	}
+}
+
 func TestScheduleConfiguration(t *testing.T) {
 	options := queueOptions{
 		schedulePrefix: "custom.schedule",

@@ -39,7 +39,7 @@ var _ queue.Queue = (*Queue)(nil)
 func NewQueue() *Queue {
 	queue, err := NewQueueWithError()
 	if err != nil {
-		color.Errorf("[queue] %s", err)
+		color.Errorf("[queue] %s\n", err)
 		return nil
 	}
 
