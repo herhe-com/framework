@@ -8,8 +8,19 @@ ai:
       base_url: https://api.openai.com/v1
       model: gpt-4o-mini
       prefix: ""
+      timeout: 300        # 请求超时（秒）
+      # 模型参数：请求未设置（0）时用这里的值补齐，留空则不下发、走服务端默认
+      temperature: 0.7    # 采样温度
+      top_p: 0            # 核采样
+      max_tokens: 0       # 最大输出 token 数
+      reasoning_effort: ""  # 思考程度：minimal/low/medium/high，留空不下发
   ollama:
     default:
       host: http://127.0.0.1:11434
       model: llama3.1
       prefix: ""
+      timeout: 300        # 请求超时（秒）
+      temperature: 0      # 采样温度
+      top_p: 0            # 核采样
+      max_tokens: 0       # 最大输出 token 数（对应 num_predict）
+      reasoning_effort: ""  # 思考程度：low/medium/high 或 true/false，映射到 think
