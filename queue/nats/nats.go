@@ -124,7 +124,28 @@ func NewNATS(configs map[string]any, names ...string) (*NATS, error) {
 		driver.signalDone()
 	}
 
+	endpoint := conn.ConnectedUrlRedacted()
+	if endpoint == "" {
+		endpoint = driver.url()
+	}
+
+	color.Infof(
+		"[queue.nats] connection %s connected to %s (server %s)\n",
+		driver.label(),
+		endpoint,
+		conn.ConnectedServerVersion(),
+	)
+
 	return driver, nil
+}
+
+// label returns the connection name used in logs.
+func (r *NATS) label() string {
+	if r.name != "" {
+		return r.name
+	}
+
+	return "default"
 }
 
 func (r *NATS) url() string {
@@ -259,7 +280,7 @@ func (r *NATS) Consumer(handler contractqueue.Handler, key string) error {
 	}
 
 	if options.needsJetStream() {
-		return r.consumeJetStream(handler, subjects, options)
+		return r.consumeJetStream(handler, key, subjects, options)
 	}
 
 	callback := func(message *natsgo.Msg) {
@@ -304,6 +325,17 @@ func (r *NATS) Consumer(handler contractqueue.Handler, key string) error {
 	if err = r.conn.Flush(); err != nil {
 		return err
 	}
+
+	queueGroup := options.queue
+	if queueGroup == "" {
+		queueGroup = "-"
+	}
+	color.Infof(
+		"[queue.nats] consumer %s subscribed to %s via core NATS (queue group %s)\n",
+		key,
+		strings.Join(subjects, ", "),
+		queueGroup,
+	)
 
 	<-r.done
 	return r.conn.LastError()
@@ -384,6 +416,7 @@ func (r *NATS) publishDelayed(
 
 func (r *NATS) consumeJetStream(
 	handler contractqueue.Handler,
+	key string,
 	subjects []string,
 	options queueOptions,
 ) error {
@@ -406,8 +439,9 @@ func (r *NATS) consumeJetStream(
 			return err
 		}
 
+		durable := consumerName(options.queue, subject)
 		consumer, err := r.js.CreateOrUpdateConsumer(ctx, streamName, jetstream.ConsumerConfig{
-			Durable:       consumerName(options.queue, subject),
+			Durable:       durable,
 			AckPolicy:     jetstream.AckExplicitPolicy,
 			FilterSubject: subject,
 			AckWait:       options.ackWait,
@@ -418,6 +452,16 @@ func (r *NATS) consumeJetStream(
 		if err != nil {
 			return err
 		}
+
+		color.Infof(
+			"[queue.nats] consumer %s subscribed to %s via JetStream stream %s (durable %s, ack_wait %s, max_ack_pending %d)\n",
+			key,
+			subject,
+			streamName,
+			durable,
+			options.ackWait,
+			options.maxAckPending,
+		)
 
 		consumeContext, err := consumer.Consume(func(message jetstream.Msg) {
 			stopKeepAlive := keepAlive(message, options.ackWait)
@@ -751,6 +795,8 @@ func (r *NATS) Close() error {
 	if !r.conn.IsClosed() {
 		r.conn.Close()
 	}
+
+	color.Infof("[queue.nats] connection %s closed\n", r.label())
 
 	r.signalDone()
 	return nil
