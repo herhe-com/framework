@@ -196,7 +196,7 @@ func TestStartConsumerPreparesBeforeConsuming(t *testing.T) {
 
 func TestConsumerDriverClosesUnderlyingDriverOnce(t *testing.T) {
 	driver := &closeCountingDriver{}
-	wrapped := &consumerDriver{Driver: driver}
+	wrapped := newConsumerDriver(driver)
 
 	if err := wrapped.Close(); err != nil {
 		t.Fatalf("first Close() error = %v", err)
@@ -342,6 +342,92 @@ func TestStartConsumerStopsWhenPrepareFails(t *testing.T) {
 	}
 }
 
+type fatalDriver struct {
+	consumerStarted chan struct{}
+}
+
+func (*fatalDriver) Producer([]byte, string, ...contractqueue.Headers) error { return nil }
+
+func (f *fatalDriver) Consumer(contractqueue.Handler, string) error {
+	select {
+	case f.consumerStarted <- struct{}{}:
+	default:
+	}
+
+	return errors.New("connection lost")
+}
+
+func (*fatalDriver) Close() error { return nil }
+
+func TestStartConsumerReconnectsAfterFatalError(t *testing.T) {
+	setConsumerTestConfig(t, map[string]any{
+		"queue.default":       "rabbit",
+		"queue.queues.search": map[string]any{},
+	})
+
+	originalMin, originalMax := consumerReconnectMin, consumerReconnectMax
+	consumerReconnectMin, consumerReconnectMax = time.Millisecond, 10*time.Millisecond
+	t.Cleanup(func() {
+		consumerReconnectMin, consumerReconnectMax = originalMin, originalMax
+	})
+
+	handler := &consumerTestHandler{key: "search", handled: make(chan []byte, 1)}
+	fatal := &fatalDriver{consumerStarted: make(chan struct{}, 1)}
+	blocking := &blockingConsumerDriver{started: make(chan struct{}), closed: make(chan struct{})}
+
+	var mu sync.Mutex
+	created := 0
+	var wait sync.WaitGroup
+
+	started, err := (&ConsumerProvider{}).startConsumer(handler, &wait, func(string) (contractqueue.Driver, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		created++
+		if created == 1 {
+			return fatal, nil
+		}
+
+		return blocking, nil
+	})
+	if err != nil {
+		t.Fatalf("startConsumer() error = %v", err)
+	}
+
+	select {
+	case <-fatal.consumerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("consumer did not start")
+	}
+
+	select {
+	case <-blocking.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("consumer was not reconnected after a fatal error")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wait.Wait()
+		close(done)
+	}()
+
+	if err = started.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("wait group did not finish after Close")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if created != 2 {
+		t.Fatalf("drivers created = %d, want 2", created)
+	}
+}
+
 func setConsumerTestConfig(t *testing.T, values map[string]any) {
 	t.Helper()
 
@@ -349,4 +435,147 @@ func setConsumerTestConfig(t *testing.T, values map[string]any) {
 	facades.SetContainer(&facades.Services{})
 	facades.Register[contractconfig.Application](consumerTestConfig{values: values})
 	t.Cleanup(func() { facades.SetContainer(original) })
+}
+
+type trackingFatalDriver struct {
+	consumerStarted chan struct{}
+	closed          chan struct{}
+	closeOnce       sync.Once
+}
+
+func (*trackingFatalDriver) Producer([]byte, string, ...contractqueue.Headers) error { return nil }
+
+func (f *trackingFatalDriver) Consumer(contractqueue.Handler, string) error {
+	select {
+	case f.consumerStarted <- struct{}{}:
+	default:
+	}
+
+	return errors.New("connection lost")
+}
+
+func (f *trackingFatalDriver) Close() error {
+	f.closeOnce.Do(func() { close(f.closed) })
+	return nil
+}
+
+func TestStartConsumerCloseDuringReconnectBackoff(t *testing.T) {
+	setConsumerTestConfig(t, map[string]any{
+		"queue.default":       "rabbit",
+		"queue.queues.search": map[string]any{},
+	})
+
+	originalMin, originalMax := consumerReconnectMin, consumerReconnectMax
+	consumerReconnectMin, consumerReconnectMax = 5*time.Second, 10*time.Second
+	t.Cleanup(func() {
+		consumerReconnectMin, consumerReconnectMax = originalMin, originalMax
+	})
+
+	handler := &consumerTestHandler{key: "search", handled: make(chan []byte, 1)}
+	fatal := &trackingFatalDriver{
+		consumerStarted: make(chan struct{}, 1),
+		closed:          make(chan struct{}),
+	}
+	var wait sync.WaitGroup
+
+	started, err := (&ConsumerProvider{}).startConsumer(handler, &wait, func(string) (contractqueue.Driver, error) {
+		return fatal, nil
+	})
+	if err != nil {
+		t.Fatalf("startConsumer() error = %v", err)
+	}
+
+	select {
+	case <-fatal.consumerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("consumer did not start")
+	}
+
+	// Failed driver must be closed immediately before entering backoff.
+	select {
+	case <-fatal.closed:
+	case <-time.After(time.Second):
+		t.Fatal("failed driver was not closed before reconnect backoff")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wait.Wait()
+		close(done)
+	}()
+
+	if err = started.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Close() did not interrupt reconnect backoff")
+	}
+}
+
+func TestStartConsumerReconnectRetriesAfterFailure(t *testing.T) {
+	setConsumerTestConfig(t, map[string]any{
+		"queue.default":       "rabbit",
+		"queue.queues.search": map[string]any{},
+	})
+
+	originalMin, originalMax := consumerReconnectMin, consumerReconnectMax
+	consumerReconnectMin, consumerReconnectMax = time.Millisecond, 5*time.Millisecond
+	t.Cleanup(func() {
+		consumerReconnectMin, consumerReconnectMax = originalMin, originalMax
+	})
+
+	prepareErr := errors.New("temporary prepare failure")
+	handler := &consumerTestHandler{key: "search", handled: make(chan []byte, 1)}
+	fatal := &fatalDriver{consumerStarted: make(chan struct{}, 1)}
+	prepareFailDriver := &closeCountingDriver{}
+	blocking := &blockingConsumerDriver{started: make(chan struct{}), closed: make(chan struct{})}
+
+	var mu sync.Mutex
+	attempts := 0
+	var wait sync.WaitGroup
+
+	started, err := (&ConsumerProvider{}).startConsumer(handler, &wait, func(string) (contractqueue.Driver, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		attempts++
+		switch attempts {
+		case 1:
+			return fatal, nil
+		case 2:
+			return nil, errors.New("dial error")
+		case 3:
+			handler.prepareMu.Lock()
+			handler.prepare = prepareErr
+			handler.prepareMu.Unlock()
+			return prepareFailDriver, nil
+		default:
+			handler.prepareMu.Lock()
+			handler.prepare = nil
+			handler.prepareMu.Unlock()
+			return blocking, nil
+		}
+	})
+	if err != nil {
+		t.Fatalf("startConsumer() error = %v", err)
+	}
+
+	select {
+	case <-blocking.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("consumer did not recover after reconnect failures")
+	}
+
+	if err = started.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	wait.Wait()
+
+	prepareFailDriver.mu.Lock()
+	defer prepareFailDriver.mu.Unlock()
+	if prepareFailDriver.closeCount != 1 {
+		t.Fatalf("prepareFailDriver closeCount = %d, want 1", prepareFailDriver.closeCount)
+	}
 }
