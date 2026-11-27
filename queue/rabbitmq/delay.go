@@ -165,7 +165,7 @@ func (d *declarer) mode() (delayMode, error) {
 
 		// Only a rejected exchange type means the plugin is missing. Any other
 		// failure (network, permissions, argument conflict) must not silently pin
-		// the connection to the TTL path.
+		// the connection to the TTL path. See isUnknownExchangeType.
 		if !isUnknownExchangeType(err) {
 			return delayModeUndecided, fmt.Errorf("rabbitmq: probe delay exchange: %w", err)
 		}
@@ -183,16 +183,25 @@ func (d *declarer) mode() (delayMode, error) {
 // isUnknownExchangeType reports whether the broker rejected a declaration
 // because it does not know the x-delayed-message type.
 //
-// RabbitMQ answers 503 (command invalid) when the community plugin is missing
-// and 540 (not implemented) for a type it never ships; every other error is a
-// real failure that must not be mistaken for "plugin not installed".
+// RabbitMQ 4.3+ answers 406 (precondition failed) with "unknown exchange type
+// 'x-delayed-message'" because the community plugin is gone; older brokers
+// answer 503 (command invalid) or 540 (not implemented). Every other error,
+// including a 406 for inequivalent arguments, is a real failure that must not
+// be mistaken for "plugin not installed".
 func isUnknownExchangeType(err error) bool {
 	var amqpErr *amqp.Error
 	if !errors.As(err, &amqpErr) {
 		return false
 	}
 
-	return amqpErr.Code == amqp.CommandInvalid || amqpErr.Code == amqp.NotImplemented
+	switch amqpErr.Code {
+	case amqp.CommandInvalid, amqp.NotImplemented:
+		return true
+	case amqp.PreconditionFailed:
+		return strings.Contains(strings.ToLower(amqpErr.Reason), "unknown exchange type")
+	}
+
+	return false
 }
 
 // ensure declares the waiting room of one (topic, route, wait) triple unless
