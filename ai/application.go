@@ -1,82 +1,61 @@
 package ai
 
 import (
-	"fmt"
+	"sync"
 
 	"github.com/gookit/color"
-	"github.com/herhe-com/framework/ai/ollama"
-	"github.com/herhe-com/framework/ai/openai"
+
 	contractai "github.com/herhe-com/framework/contracts/ai"
 	"github.com/herhe-com/framework/facades"
 )
 
+// AI 是模型服务的入口:启动时按 ai.default 建默认渠道,其余渠道取用时再构造。
 type AI struct {
 	contractai.Driver
-	drivers map[string]contractai.Driver
+
+	name     string
+	mutex    sync.Mutex
+	channels map[string]contractai.Driver
 }
 
+// NewAI 读取 ai.default 并建默认渠道;没配置渠道时返回 nil,由调用方判定 AI 不可用。
 func NewAI() *AI {
 
-	defaultDriver := facades.Config().GetString("ai.driver")
-
-	if defaultDriver == "" {
-		color.Errorln("[ai] please set default driver")
+	name := facades.Config().GetString("ai.default")
+	if name == "" {
+		color.Errorln("[ai] please set default channel (ai.default)")
 		return nil
 	}
 
-	driver, err := NewDriver(defaultDriver, "default")
-
+	driver, err := NewChannel(name)
 	if err != nil {
 		color.Errorf("[ai] %s", err)
 		return nil
 	}
 
-	drivers := make(map[string]contractai.Driver)
-	key := fmt.Sprintf("%s_%s", defaultDriver, "default")
-	drivers[key] = driver
-
 	return &AI{
-		drivers: drivers,
-		Driver:  driver,
+		Driver:   driver,
+		name:     name,
+		channels: map[string]contractai.Driver{name: driver},
 	}
 }
 
-func NewDriver(driver string, name string) (contractai.Driver, error) {
+// Channel 返回指定渠道,首次取用时构造并缓存,同一渠道只初始化一次。
+func (r *AI) Channel(name string) (contractai.Driver, error) {
 
-	switch driver {
-	case DriverOpenAI:
-		return openai.NewClient(name)
-	case DriverOllama:
-		return ollama.NewClient(name)
-	case DriverClaude:
-		return nil, fmt.Errorf("claude driver not implemented yet")
-	case DriverGemini:
-		return nil, fmt.Errorf("gemini driver not implemented yet")
-	case DriverQianwen:
-		return nil, fmt.Errorf("qianwen driver not implemented yet")
-	case DriverZhipu:
-		return nil, fmt.Errorf("zhipu driver not implemented yet")
-	case DriverDeepSeek:
-		return nil, fmt.Errorf("deepseek driver not implemented yet")
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if driver, exists := r.channels[name]; exists {
+		return driver, nil
 	}
 
-	return nil, fmt.Errorf("invalid driver: %s", driver)
-}
-
-func (r *AI) Channel(driver string, name string) (contractai.Driver, error) {
-
-	key := fmt.Sprintf("%s_%s", driver, name)
-
-	if dri, exist := r.drivers[key]; exist {
-		return dri, nil
-	}
-
-	dri, err := NewDriver(driver, name)
+	driver, err := NewChannel(name)
 	if err != nil {
 		return nil, err
 	}
 
-	r.drivers[key] = dri
+	r.channels[name] = driver
 
-	return dri, nil
+	return driver, nil
 }

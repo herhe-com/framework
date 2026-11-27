@@ -87,6 +87,36 @@ func TestMessageDeltaUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestMessageDeltaUnmarshalReasoning(t *testing.T) {
+
+	tests := []struct {
+		name      string
+		input     string
+		reasoning string
+		content   string
+	}{
+		{name: "reasoning-content", input: `{"role":"assistant","reasoning_content":"先想","content":""}`, reasoning: "先想"},
+		{name: "reasoning", input: `{"role":"assistant","reasoning":"先想","content":"结论"}`, reasoning: "先想", content: "结论"},
+		{name: "both", input: `{"role":"assistant","reasoning_content":"先想","reasoning":"忽略","content":"结论"}`, reasoning: "先想", content: "结论"},
+		{name: "none", input: `{"role":"assistant","content":"结论"}`, content: "结论"},
+	}
+
+	for _, item := range tests {
+		t.Run(item.name, func(t *testing.T) {
+			var delta MessageDelta
+			if err := json.Unmarshal([]byte(item.input), &delta); err != nil {
+				t.Fatalf("unmarshal delta: %v", err)
+			}
+			if delta.Reasoning != item.reasoning {
+				t.Errorf("reasoning: got %s, want %s", delta.Reasoning, item.reasoning)
+			}
+			if delta.Content != item.content {
+				t.Errorf("content: got %s, want %s", delta.Content, item.content)
+			}
+		})
+	}
+}
+
 func TestApplyPrefix(t *testing.T) {
 
 	messages := []Message{{Role: "system", Content: "你是助手"}}
@@ -112,6 +142,12 @@ func TestApplyPrefix(t *testing.T) {
 	if messages[0].Content != "x" {
 		t.Errorf("empty prefix: got %s", messages[0].Content)
 	}
+
+	messages = []Message{{Role: "system"}}
+	ApplyPrefix(messages, "P")
+	if messages[0].Content != "P" || len(messages[0].Parts) != 0 {
+		t.Errorf("empty system prefix: got content=%q parts=%+v", messages[0].Content, messages[0].Parts)
+	}
 }
 
 func TestDataUrl(t *testing.T) {
@@ -127,40 +163,6 @@ func TestDataUrl(t *testing.T) {
 
 	if got := StringOfDataUrl("https://example.com/a.png"); got != "https://example.com/a.png" {
 		t.Errorf("plain url: got %s", got)
-	}
-}
-
-func TestModelDefaultsApply(t *testing.T) {
-
-	defaults := ModelDefaults{
-		Model:           "config-model",
-		Temperature:     0.2,
-		TopP:            0.9,
-		MaxTokens:       100,
-		ReasoningEffort: ReasoningOfHigh,
-	}
-
-	filled := &ChatRequest{}
-	defaults.Apply(filled)
-
-	if filled.Model != defaults.Model || filled.Temperature != defaults.Temperature ||
-		filled.TopP != defaults.TopP || filled.MaxTokens != defaults.MaxTokens ||
-		filled.ReasoningEffort != defaults.ReasoningEffort {
-		t.Errorf("配置默认值未补齐：%+v", filled)
-	}
-
-	kept := &ChatRequest{
-		Model:           "request-model",
-		Temperature:     0.7,
-		TopP:            0.5,
-		MaxTokens:       10,
-		ReasoningEffort: ReasoningOfLow,
-	}
-	defaults.Apply(kept)
-
-	if kept.Model != "request-model" || kept.Temperature != 0.7 || kept.TopP != 0.5 ||
-		kept.MaxTokens != 10 || kept.ReasoningEffort != ReasoningOfLow {
-		t.Errorf("请求显式值被覆盖：%+v", kept)
 	}
 }
 

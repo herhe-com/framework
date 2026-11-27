@@ -9,17 +9,24 @@ import (
 	"strings"
 )
 
+// AI 是模型服务的入口:默认渠道加按渠道名取用。
 type AI interface {
 	Driver
-	Channel(driver string, name string) (Driver, error)
+	// Channel 返回指定渠道,渠道由 ai.channels.<name> 定义;同一渠道只初始化一次。
+	Channel(name string) (Driver, error)
 }
 
+// Driver 是一个已配置好的模型渠道。
+//
+// 渠道的 driver 字段决定走哪家协议,底层统一由 eino 的 model 组件实现:
+// 框架只负责读取配置、把契约映射成 eino 的入参,不再自己维护各家的 HTTP/SSE 协议。
 type Driver interface {
 	Chat(c context.Context, request *ChatRequest) (*ChatResponse, error)
 	Stream(c context.Context, request *ChatRequest) (chan *StreamResponse, error)
-	Embedding(c context.Context, request *EmbeddingRequest) (*EmbeddingResponse, error)
-	Models(c context.Context) ([]Model, error)
+	// Dri 返回驱动名:openai/ollama/anthropic/gemini。
 	Dri() string
+	// Model 返回渠道配置的默认模型名,供日志在模型未回传名称时兜底。
+	Model() string
 }
 
 // 内容块类型常量。
@@ -44,39 +51,12 @@ const (
 	ReasoningOfHigh    = "high"    // 高,质量优先
 )
 
-// ModelDefaults 是驱动从 ai.<driver>.<name>.* 配置读出的模型参数默认值。
-//
-// 各驱动的配置路径不同,所以读取留在驱动层;往请求里补齐的逻辑只有这一份。
-type ModelDefaults struct {
-	Model           string
-	Temperature     float64
-	TopP            float64
-	MaxTokens       int
-	ReasoningEffort string
-}
-
-// Apply 用默认值补齐请求未设置(0 或空字符串)的字段,已设置的值原样保留。
-func (d ModelDefaults) Apply(request *ChatRequest) {
-	if request.Model == "" {
-		request.Model = d.Model
-	}
-
-	if request.Temperature == 0 {
-		request.Temperature = d.Temperature
-	}
-
-	if request.TopP == 0 {
-		request.TopP = d.TopP
-	}
-
-	if request.MaxTokens == 0 {
-		request.MaxTokens = d.MaxTokens
-	}
-
-	if request.ReasoningEffort == "" {
-		request.ReasoningEffort = d.ReasoningEffort
-	}
-}
+// 输出格式取值常量,对应 response_format.type。
+const (
+	ResponseOfText   = "text"        // 不约束,与不下发 response_format 等价
+	ResponseOfJSON   = "json_object" // 只要求输出是合法 JSON 对象,字段仍由模型自行决定
+	ResponseOfSchema = "json_schema" // 按 JSON Schema 约束字段结构、必填项与取值范围
+)
 
 // FileDataUrlPrefix Data Url 中 base64 段的起始标记,例如 data:application/pdf;base64,<内容>。
 const (
@@ -86,16 +66,72 @@ const (
 // ChatRequest 聊天请求。
 //
 // Temperature/TopP/MaxTokens 为 0、ReasoningEffort 为空字符串时,表示请求未设置,
-// 由驱动用 ai.<driver>.<name>.* 配置的默认值补齐;配置也没填时该字段不下发,
-// 交给服务端默认行为。补齐全过程由 ModelDefaults.Apply 完成。
+// 用 ai.channels.<name> 里配置的渠道默认值;配置也没填时不下发,交给服务端默认行为。
+//
+// 默认值在渠道构造时注入 eino 组件,按请求覆盖走 eino 的 model.Option,框架不做二次补齐。
+//
+// ResponseFormat 为 nil 时不下发,输出格式完全由提示词决定。
 type ChatRequest struct {
-	Model           string    `json:"model"`
-	Messages        []Message `json:"messages"`
-	Temperature     float64   `json:"temperature,omitempty"`
-	TopP            float64   `json:"top_p,omitempty"`
-	MaxTokens       int       `json:"max_tokens,omitempty"`
-	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
-	Stream          bool      `json:"stream,omitempty"`
+	Model           string          `json:"model"`
+	Messages        []Message       `json:"messages"`
+	Temperature     float64         `json:"temperature,omitempty"`
+	TopP            float64         `json:"top_p,omitempty"`
+	MaxTokens       int             `json:"max_tokens,omitempty"`
+	ReasoningEffort string          `json:"reasoning_effort,omitempty"`
+	ResponseFormat  *ResponseFormat `json:"response_format,omitempty"`
+	Stream          bool            `json:"stream,omitempty"`
+}
+
+// ResponseFormat 约束模型输出格式,对应 OpenAI 协议的 response_format。
+//
+// type=json_object 只保证输出是合法 JSON,字段是否齐全仍取决于提示词;
+// type=json_schema 由解码侧保证结构,但保证不了“药名必须逐字来自输入”这类语义约束,
+// 业务规则仍需写在提示词里。服务端不认该参数时(部分网关)输出会退回纯文本,
+// 调用方仍要按“可能解析失败”处理。
+type ResponseFormat struct {
+	Type       string        `json:"type"`
+	JSONSchema *SchemaFormat `json:"json_schema,omitempty"`
+}
+
+// SchemaFormat 是 json_schema 模式的描述,对应 OpenAI 协议的 json_schema 字段。
+type SchemaFormat struct {
+	Name   string          `json:"name"`             // schema 名称,同一服务内唯一
+	Strict bool            `json:"strict,omitempty"` // 严格模式:所有字段都要在 required 里声明,且不允许额外字段
+	Schema json.RawMessage `json:"schema"`           // JSON Schema 原文
+}
+
+// ResponseFormatOfJSON 返回“只要求合法 JSON 对象”的输出约束。
+func ResponseFormatOfJSON() *ResponseFormat {
+	return &ResponseFormat{Type: ResponseOfJSON}
+}
+
+// ResponseFormatOfSchema 用 JSON Schema 构造结构化输出约束,strict 为 true 时启用严格模式。
+//
+// schema 必须是合法的 JSON 对象字面量(不能是数组或空值),构造阶段就校验,
+// 避免把坏 schema 发给模型后在服务端才报错。严格模式下多数服务商要求
+// 所有字段都列进 required 并显式声明 additionalProperties:false。
+func ResponseFormatOfSchema(name string, schema []byte, strict bool) (*ResponseFormat, error) {
+
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("response format: schema name is required")
+	}
+
+	var object json.RawMessage
+	if err := json.Unmarshal(schema, &object); err != nil {
+		return nil, fmt.Errorf("response format: invalid json schema: %w", err)
+	}
+	if trimmed := bytes.TrimSpace(object); len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil, fmt.Errorf("response format: json schema must be an object")
+	}
+
+	return &ResponseFormat{
+		Type: ResponseOfSchema,
+		JSONSchema: &SchemaFormat{
+			Name:   strings.TrimSpace(name),
+			Strict: strict,
+			Schema: object,
+		},
+	}, nil
 }
 
 // Message 聊天消息。
@@ -103,10 +139,13 @@ type ChatRequest struct {
 // Content 为纯文本内容;Parts 为多模态内容块,通过 MarshalJSON 序列化为数组,
 // 兼容各大模型服务商的 OpenAI 协议扩展。Content 保持原样,确保纯文本用法不变。
 // TextPart、ImagePart、FilePart 用于构造带内容块的消息,也支持手工组装。
+//
+// Reasoning 是推理模型返回的思考过程,仅在解析响应时回填,发送消息时不会下发。
 type Message struct {
-	Role    string
-	Content string
-	Parts   []Part
+	Role      string
+	Content   string
+	Reasoning string
+	Parts     []Part
 }
 
 // Part 多模态内容块。
@@ -157,7 +196,7 @@ func ApplyPrefix(messages []Message, prefix string) {
 	}
 
 	first := &messages[0]
-	if first.Content != "" {
+	if first.Content != "" || len(first.Parts) == 0 {
 		first.Content = prefix + first.Content
 		return
 	}
@@ -202,8 +241,10 @@ func (r Message) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON 兼容字符串与数组两种内容格式,数组会同时回填 Parts 与 Content。
 func (r *Message) UnmarshalJSON(data []byte) error {
 	var w struct {
-		Role    string          `json:"role"`
-		Content json.RawMessage `json:"content"`
+		Role             string          `json:"role"`
+		Content          json.RawMessage `json:"content"`
+		ReasoningContent string          `json:"reasoning_content"`
+		Reasoning        string          `json:"reasoning"`
 	}
 	if err := json.Unmarshal(data, &w); err != nil {
 		return err
@@ -215,8 +256,18 @@ func (r *Message) UnmarshalJSON(data []byte) error {
 	}
 
 	r.Role, r.Content, r.Parts = w.Role, content, parts
+	r.Reasoning = reasoningOf(w.ReasoningContent, w.Reasoning)
 
 	return nil
+}
+
+// reasoningOf 取思考过程:多数网关用 reasoning_content,少数用 reasoning。
+func reasoningOf(content string, reasoning string) string {
+	if content != "" {
+		return content
+	}
+
+	return reasoning
 }
 
 // decodeContent 解析消息内容,兼容字符串与数组两种形态。
@@ -252,12 +303,6 @@ func decodeContent(raw json.RawMessage) (string, []Part, error) {
 	return strings.Join(texts, "\n"), parts, nil
 }
 
-// EmbeddingRequest 向量请求。
-type EmbeddingRequest struct {
-	Model string   `json:"model"`
-	Input []string `json:"input"`
-}
-
 // ChatResponse 聊天响应。
 type ChatResponse struct {
 	ID      string   `json:"id"`
@@ -273,11 +318,15 @@ type Choice struct {
 	FinishReason string  `json:"finish_reason"`
 }
 
-// Usage 用量。
+// Usage 用量,取自服务端返回的官方 usage。
+//
+// 推理模型的思考和正文一起计入 CompletionTokens,ReasoningTokens 是其中的思考部分,
+// 用于单独观察「想」花了多少;服务端不回传明细时为 0。
 type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens     int `json:"prompt_tokens"`     // 输入 token
+	CompletionTokens int `json:"completion_tokens"` // 输出 token(含推理)
+	ReasoningTokens  int `json:"reasoning_tokens"`  // 输出中的推理 token;服务端不回传时为 0
+	TotalTokens      int `json:"total_tokens"`      // 合计 token
 }
 
 // StreamResponse 流式响应。
@@ -287,6 +336,9 @@ type StreamResponse struct {
 	Choices []StreamChoice `json:"choices"`
 	Done    bool           `json:"done"`
 	Error   error          `json:"error,omitempty"`
+	// Usage 是该片的用量,一般只有末片带(None 表示这一片没有回传用量);
+	// 需要整条流的用量时取最后一个非空的 Usage。
+	Usage *Usage `json:"usage,omitempty"`
 }
 
 // UnmarshalJSON 兼容 string 与 object 两种错误形态（部分服务商会把业务错误作为流事件下发）。
@@ -297,6 +349,7 @@ func (r *StreamResponse) UnmarshalJSON(data []byte) error {
 		Model   string          `json:"model"`
 		Choices []StreamChoice  `json:"choices"`
 		Done    bool            `json:"done"`
+		Usage   *Usage          `json:"usage"`
 		Error   json.RawMessage `json:"error"`
 	}
 
@@ -309,6 +362,7 @@ func (r *StreamResponse) UnmarshalJSON(data []byte) error {
 	r.Model = w.Model
 	r.Choices = w.Choices
 	r.Done = w.Done
+	r.Usage = w.Usage
 
 	if len(w.Error) != 0 && !bytes.Equal(bytes.TrimSpace(w.Error), []byte("null")) {
 		// 对象形态 {"message": ...} 来自 OpenAI 兼容网关,字符串形态来自 ollama 等
@@ -356,17 +410,23 @@ func Send(c context.Context, ch chan *StreamResponse, value *StreamResponse) boo
 }
 
 // MessageDelta 流式增量消息,与 Message 一样兼容字符串与数组内容。
+//
+// Reasoning 是推理模型在正文之前输出的思考过程增量,与 Content 分开下发,
+// 每个分片都需要原样追加;非推理模型或网关不透传时始终为空。
 type MessageDelta struct {
-	Role    string
-	Content string
-	Parts   []Part
+	Role      string
+	Content   string
+	Reasoning string
+	Parts     []Part
 }
 
 // UnmarshalJSON 兼容字符串与数组两种内容格式,数组会同时回填 Parts 与 Content。
 func (r *MessageDelta) UnmarshalJSON(data []byte) error {
 	var w struct {
-		Role    string          `json:"role"`
-		Content json.RawMessage `json:"content"`
+		Role             string          `json:"role"`
+		Content          json.RawMessage `json:"content"`
+		ReasoningContent string          `json:"reasoning_content"`
+		Reasoning        string          `json:"reasoning"`
 	}
 	if err := json.Unmarshal(data, &w); err != nil {
 		return err
@@ -378,26 +438,7 @@ func (r *MessageDelta) UnmarshalJSON(data []byte) error {
 	}
 
 	r.Role, r.Content, r.Parts = w.Role, content, parts
+	r.Reasoning = reasoningOf(w.ReasoningContent, w.Reasoning)
 
 	return nil
-}
-
-// EmbeddingResponse 向量响应。
-type EmbeddingResponse struct {
-	Model string      `json:"model"`
-	Data  []Embedding `json:"data"`
-	Usage Usage       `json:"usage"`
-}
-
-// Embedding 向量结果。
-type Embedding struct {
-	Index     int       `json:"index"`
-	Embedding []float64 `json:"embedding"`
-}
-
-// Model 模型定义。
-type Model struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	OwnedBy string `json:"owned_by"`
 }
