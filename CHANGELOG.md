@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.11.7 (2026-11-27)
 
 ### ⚠️ Breaking Changes
 
@@ -22,6 +22,7 @@
 - **swagger**: Swagger UI 支持深色模式，右下角按钮在「系统 → 深色 → 浅色」间轮换；系统模式清除本地缓存并跟随 `prefers-color-scheme` 实时切换，手选深色/浅色写入 `localStorage`；UI 处理器改由 `http/swagger` 提供
 - **queue**: RabbitMQ 延迟与阶梯重试兼容 4.2 及以下与 4.3+：新增 `queue.connections.<name>.delay_mode`（`auto`/`plugin`/`ttl`），默认按 broker 能力自动探测 `x-delayed-message` 插件；有插件时保持旧行为（业务 exchange 声明为 `x-delayed-message`，重试走共享延迟 exchange），无插件时改为 TTL 等待队列 + 死信回投，业务 exchange 类型保持不变，`delayed` 配置被忽略，`delayed` 与 `ttl` 不再互斥
 - **queue**: NATS 连接与消费启动时打印 `[queue.nats]` 运行信息：连接地址（经 `ConnectedUrlRedacted()` 脱敏）与服务端版本、core/JetStream 订阅的 subject、queue group、stream、durable consumer、`ack_wait`、`max_ack_pending`，连接关闭时也打印一行
+- **console**: 队列消费者遇到致命连接错误后自动以指数退避重建驱动并重连，退避前立即关闭失效驱动，调用 `Close` 时可干净中断退避
 
 ### 🐛 Bug Fixes
 
@@ -46,6 +47,10 @@
 ### ⚙️ Miscellaneous
 
 - 升级全部依赖模块至最新版本（aws-sdk-go-v2、kitex、carbon、goose、nats.go、minio-go、qiniu、go-redis、amqp091-go 等）；`github.com/mfridman/interpolate` 仍锁定在 `v0.0.2`，goose v3.30.0 尚未适配 `v0.2.0` 的 API
+- **contracts**: 为 HTTP 通用请求与响应契约补充 Swagger 字段注释、`example`、`enums` 与 `swaggertype` 提示
+- **captcha**: 更新点选验证码默认字符集
+
+**完整变更**: https://github.com/herhe-com/framework/compare/v1.11.6...v1.11.7
 
 ## v1.11.6 (2026-10-22)
 
